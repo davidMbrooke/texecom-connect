@@ -17,6 +17,7 @@ class TexecomConnect:
     def __init__(self, host, port):
         self.host = host
         self.port = port
+        self.crc8_func = crcmod.mkCrcFun(poly=0x185, rev=False, initCrc=0xff)
         self.nextseq = 0
     
     def connect(self):
@@ -40,9 +41,7 @@ class TexecomConnect:
     
     def sendcommand(self, body):
         data = b'tC'+chr(len(body)+5)+chr(self.getnextseq())+body
-        crc8_func = crcmod.predefined.mkPredefinedCrcFun("crc-8")
-        foo = crc8_func(data)
-        foo = 0x34
+        foo = self.crc8_func(data)
         data += chr(foo)
         hexdump.hexdump(data)
         self.s.send(data)
