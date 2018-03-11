@@ -54,6 +54,7 @@ class TexecomConnect:
         self.crc8_func = crcmod.mkCrcFun(poly=0x185, rev=False, initCrc=0xff)
         self.nextseq = 0
         self.message_handler_func = message_handler_func
+        self.print_network_traffic = True
 
     def hexstr(self,s):
         return " ".join("{:02x}".format(ord(c)) for c in s)
@@ -79,9 +80,14 @@ class TexecomConnect:
         messages that arrive first"""
         while True:
             header = self.s.recv(self.LENGTH_HEADER)
-            #hexdump.hexdump(header)
+            if self.print_network_traffic:
+                print("Received message header:")
+                hexdump.hexdump(header)
             msg_start,msg_type,msg_length,msg_sequence = list(header)
             payload = self.s.recv(ord(msg_length) - self.LENGTH_HEADER)
+            if self.print_network_traffic:
+                print("Received message payload:")
+                hexdump.hexdump(payload)
             payload, msg_crc = payload[:-1], ord(payload[-1])
             expected_crc = self.crc8_func(header+payload)
             if msg_start != 't':
@@ -101,7 +107,9 @@ class TexecomConnect:
     def sendcommand(self, body):
         data = self.HEADER_START+self.HEADER_TYPE_COMMAND+chr(len(body)+5)+chr(self.getnextseq())+body
         data += chr(self.crc8_func(data))
-        # hexdump.hexdump(data)
+        if self.print_network_traffic:
+            print("Sending command:")
+            hexdump.hexdump(data)
         self.s.send(data)
         
     def login(self, udl):
@@ -119,7 +127,7 @@ class TexecomConnect:
 
     def set_event_messages(self):
         # this enables all messages
-        body = self.CMD_SETEVENTMESSAGES+chr(0xff)+chr(0xff)
+        body = self.CMD_SETEVENTMESSAGES+chr(0x3e)+chr(0x00)
         self.sendcommand(body)
         payload=self.recvresponse()
         print("set event messages response payload is: "+self.hexstr(payload))
