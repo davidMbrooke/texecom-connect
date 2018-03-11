@@ -22,6 +22,7 @@ from __future__ import print_function
 
 import socket
 import time
+import os
 
 import crcmod
 import hexdump
@@ -211,6 +212,14 @@ class TexecomConnect:
 
 def message_handler(payload):
     tc.debug_print_message(payload)
+    msg_type,payload = payload[0],payload[1:]
+    if msg_type == tc.MSG_ZONEEVENT:
+        zone_number = ord(payload[0])
+        zone_bitmap = ord(payload[1])
+        zone_state = zone_bitmap & 0x3
+        if zone_number == 73 and zone_state == 1:
+            print("Garage PIR activated; running script")
+            os.system("./garage-pir.sh")
 
 if __name__ == '__main__':
     texhost = '192.168.1.9'
