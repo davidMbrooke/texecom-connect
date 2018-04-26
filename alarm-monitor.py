@@ -93,13 +93,16 @@ class TexecomConnect:
             expected_crc = self.crc8_func(header+payload)
             if msg_start != 't':
                 print("unexpected msg start: "+hex(ord(msg_start)))
+                return None
             if msg_crc != expected_crc:
                 print("crc: expected="+str(expected_crc)+" actual="+str(msg_crc))
+                return None
             # FIXME: check seq
             # FIXME: check we received the full expected length
             # FIXME: add a timeout to recv(), if panel takes over 1second to finish sending something is probably wrong
             if msg_type == self.HEADER_TYPE_COMMAND:
                 print("received command unexpectedly")
+                return None
             elif msg_type == self.HEADER_TYPE_RESPONSE:
                 return payload
             elif msg_type == self.HEADER_TYPE_MESSAGE:
@@ -117,14 +120,21 @@ class TexecomConnect:
         body = self.CMD_LOGIN+udl
         self.sendcommand(body)
         payload=self.recvresponse()
+        if payload == None:
+            print("Invalid response to login command; try again.")
+            return False
         print("login response payload is: "+self.hexstr(payload))
         commandid,response = list(payload)
         if commandid != self.CMD_LOGIN:
             print("Got response for wrong command id: "+hex(ord(commandid)))
+            return False
         if response == self.CMD_RESPONSE_NAK:
             print("NAK response from panel")
+            return False
         elif response != self.CMD_RESPONSE_ACK:
             print("unexpected ack payload: "+hex(ord(response)))
+            return False
+        return True
 
     def set_event_messages(self):
         # this enables all messages
@@ -146,12 +156,18 @@ class TexecomConnect:
         payload=self.recvresponse()
         commandid,datetime = payload[0],payload[1:]
         if commandid != self.CMD_GETDATETIME:
-            print("Got response for wrong command id: Expected "+hex(ord(self.CMD_GETDATETIME))+", got "+hex(ord(commandid)))
+            print("GETDATETIME got response for wrong command id: Expected "+hex(ord(self.CMD_GETDATETIME))+", got "+hex(ord(commandid)))
             print("Payload: "+self.hexstr(payload))
+            return None
+        if len(datetime) < 6:
+            print("GETDATETIME: response too short")
+            print("Payload: "+self.hexstr(payload))
+            return None
         datetime = bytearray(datetime)
         datetimestr = '20{2:02d}/{1:02d}/{0:02d} {3:02d}:{4:02d}:{5:02d}'.format(*datetime)
         print("Panel date/time: "+datetimestr)
-    
+        return datetimestr
+
     def event_loop(self):
         while True:
             try:
@@ -159,7 +175,12 @@ class TexecomConnect:
         
             except socket.timeout:
                 # send any message to reset the panel's 60 second timeout
-                tc.get_date_time()
+                result = tc.get_date_time()
+                if result == None:
+                    print("Failure of 'get date time' is usually unrecoverable; exiting")
+                    print("This may be due to a monitor only latch key; see http://texecom.websitetoolbox.com/post?id=9678400&trail=30")
+                    # TODO could just reconnect
+                    sys.exit(1)
 
     def debug_print_message(self, payload):
         msg_type,payload = payload[0],payload[1:]
@@ -224,9 +245,12 @@ def message_handler(payload):
 if __name__ == '__main__':
     texhost = '192.168.1.9'
     port = 10001
+    udlpassword = '1234'
     tc = TexecomConnect(texhost, port, message_handler)
     tc.connect()
-    tc.login('1234')
+    if not tc.login(udlpassword):
+        print("Login failed - udl password incorrect or pre-v4 panel, exiting.")
+        sys.exit(1)
     print("login successful")
     tc.set_event_messages()
     tc.get_date_time()
