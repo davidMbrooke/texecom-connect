@@ -23,6 +23,7 @@ from __future__ import print_function
 import socket
 import time
 import os
+import sys
 
 import crcmod
 import hexdump
@@ -242,10 +243,29 @@ def message_handler(payload):
             print("Garage PIR activated; running script")
             os.system("./garage-pir.sh")
 
+# disable buffering to stdout when it's redirected to a file/pipe
+# This makes sure any events appear immediately in the file/pipe,
+# instead of being queued until there is a full buffer's worth.
+class Unbuffered(object):
+   def __init__(self, stream):
+       self.stream = stream
+   def write(self, data):
+       self.stream.write(data)
+       self.stream.flush()
+   def writelines(self, datas):
+       self.stream.writelines(datas)
+       self.stream.flush()
+   def __getattr__(self, attr):
+       return getattr(self.stream, attr)
+
+
 if __name__ == '__main__':
     texhost = '192.168.1.9'
     port = 10001
     udlpassword = '1234'
+
+
+    sys.stdout = Unbuffered(sys.stdout)
     tc = TexecomConnect(texhost, port, message_handler)
     tc.connect()
     if not tc.login(udlpassword):
