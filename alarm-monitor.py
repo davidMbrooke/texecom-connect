@@ -37,6 +37,7 @@ class TexecomConnect:
     HEADER_TYPE_MESSAGE = 'M' # unsolicited message
     
     CMD_LOGIN = chr(1)
+    CMD_GETLCDDISPLAY = chr(13)
     CMD_GETDATETIME = chr(23)
     CMD_SETEVENTMESSAGES = chr(37)
     
@@ -138,8 +139,14 @@ class TexecomConnect:
         return True
 
     def set_event_messages(self):
-        # this enables all messages
-        body = self.CMD_SETEVENTMESSAGES+chr(0x3e)+chr(0x00)
+        DEBUG_FLAG = 1
+        ZONE_EVENT_FLAG = 1<<1
+        AREA_EVENT_FLAG = 1<<2
+        OUTPUT_EVENT_FLAG = 1<<3
+        USER_EVENT_FLAG = 1<<4
+        LOG_FLAG = 1<<5
+        events = ZONE_EVENT_FLAG | AREA_EVENT_FLAG | USER_EVENT_FLAG
+        body = self.CMD_SETEVENTMESSAGES+chr(events & 0xff)+chr(events >> 8)
         self.sendcommand(body)
         payload=self.recvresponse()
         print("set event messages response payload is: "+self.hexstr(payload))
@@ -169,6 +176,22 @@ class TexecomConnect:
         print("Panel date/time: "+datetimestr)
         return datetimestr
 
+    def get_lcd_display(self):
+        body = self.CMD_GETLCDDISPLAY
+        self.sendcommand(body)
+        payload=self.recvresponse()
+        commandid,lcddisplay = payload[0],payload[1:]
+        if commandid != self.CMD_GETLCDDISPLAY:
+            print("GETLCDDISPLAY got response for wrong command id: Expected "+hex(ord(self.CMD_GETLCDDISPLAY))+", got "+hex(ord(commandid)))
+            print("Payload: "+self.hexstr(payload))
+            return None
+        if len(lcddisplay) != 32:
+            print("GETLCDDISPLAY: response wrong length")
+            print("Payload: "+self.hexstr(payload))
+            return None
+        print("Panel LCD display: "+lcddisplay)
+        return lcddisplay
+
     def event_loop(self):
         while True:
             try:
@@ -183,7 +206,7 @@ class TexecomConnect:
         
             except socket.timeout:
                 # send any message to reset the panel's 60 second timeout
-                result = tc.get_date_time()
+                result = tc.get_lcd_display()
                 if result == None:
                     print("Failure of 'get date time' is usually unrecoverable; exiting")
                     print("This may be due to a monitor only latch key; see http://texecom.websitetoolbox.com/post?id=9678400&trail=30")
