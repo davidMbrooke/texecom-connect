@@ -158,14 +158,23 @@ class TexecomConnect:
         elif response != self.CMD_RESPONSE_ACK:
             print("unexpected ack payload: "+hex(ord(response)))
 
-    def get_date_time(self):
-        body = self.CMD_GETDATETIME
+    def send_command_and_get_response(self, cmd, body):
+        if body:
+            body = cmd+body
+        else:
+            body = cmd
         self.sendcommand(body)
-        payload=self.recvresponse()
-        commandid,datetime = payload[0],payload[1:]
-        if commandid != self.CMD_GETDATETIME:
-            print("GETDATETIME got response for wrong command id: Expected "+hex(ord(self.CMD_GETDATETIME))+", got "+hex(ord(commandid)))
+        response=self.recvresponse()
+        commandid,payload = response[0],response[1:]
+        if commandid != cmd:
+            print("Got response for wrong command id: Expected "+hex(ord(cmd))+", got "+hex(ord(commandid)))
             print("Payload: "+self.hexstr(payload))
+            return None
+        return payload
+
+    def get_date_time(self):
+        datetime = self.send_command_and_get_response(self.CMD_GETDATETIME, None)
+        if datetime == None:
             return None
         if len(datetime) < 6:
             print("GETDATETIME: response too short")
@@ -177,13 +186,8 @@ class TexecomConnect:
         return datetimestr
 
     def get_lcd_display(self):
-        body = self.CMD_GETLCDDISPLAY
-        self.sendcommand(body)
-        payload=self.recvresponse()
-        commandid,lcddisplay = payload[0],payload[1:]
-        if commandid != self.CMD_GETLCDDISPLAY:
-            print("GETLCDDISPLAY got response for wrong command id: Expected "+hex(ord(self.CMD_GETLCDDISPLAY))+", got "+hex(ord(commandid)))
-            print("Payload: "+self.hexstr(payload))
+        lcddisplay = self.send_command_and_get_response(self.CMD_GETLCDDISPLAY, None)
+        if lcddisplay == None:
             return None
         if len(lcddisplay) != 32:
             print("GETLCDDISPLAY: response wrong length")
