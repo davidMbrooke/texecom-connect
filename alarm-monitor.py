@@ -37,7 +37,9 @@ class TexecomConnect:
     HEADER_TYPE_MESSAGE = 'M' # unsolicited message
     
     CMD_LOGIN = chr(1)
+    CMD_GETZONEDETAILS = chr(3)
     CMD_GETLCDDISPLAY = chr(13)
+    CMD_GETPANELIDENTIFICATION = chr(22)
     CMD_GETDATETIME = chr(23)
     CMD_SETEVENTMESSAGES = chr(37)
     
@@ -58,6 +60,7 @@ class TexecomConnect:
         self.nextseq = 0
         self.message_handler_func = message_handler_func
         self.print_network_traffic = True
+        self.zone = {}
 
     def hexstr(self,s):
         return " ".join("{:02x}".format(ord(c)) for c in s)
@@ -196,6 +199,46 @@ class TexecomConnect:
         print("Panel LCD display: "+lcddisplay)
         return lcddisplay
 
+    def get_panel_identification(self):
+        panelid = self.send_command_and_get_response(self.CMD_GETPANELIDENTIFICATION, None)
+        if panelid == None:
+            return None
+        if len(panelid) != 32:
+            print("GETPANELIDENTIFICATION: response wrong length")
+            print("Payload: "+self.hexstr(payload))
+            return None
+        print("Panel identification: "+panelid)
+        return panelid
+
+    def get_zone_details(self, zone):
+        # FIXME: length of command & response varies depending on number of zones/areas on panel
+        details = self.send_command_and_get_response(self.CMD_GETZONEDETAILS, chr(zone))
+        if details == None:
+            return None
+        if len(details) < 34:
+            print("GETZONEDETAILS: response wrong length")
+            print("Payload: "+self.hexstr(payload))
+            return None
+        zonetype, areabitmap, zonetext = ord(details[0]), ord(details[1]), details[2:]
+        zonetext = zonetext.strip(" \x00")
+        print("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
+              format(zone, zonetype, areabitmap, zonetext))
+        return (zonetype, areabitmap, zonetext)
+
+    def get_all_zones(self):
+        idstr = tc.get_panel_identification()
+        panel_type,num_of_zones,something,firmware_version = idstr.split()
+        num_of_zones = int(num_of_zones)
+        for zone in range(1, num_of_zones + 1):
+            # FIXME: if an event arrives whilst we're waiting for a response, it seems the panel doesn't reply, so we need to timeout and send again
+            zonetype, areabitmap, zonetext = tc.get_zone_details(zone)
+            zonedata = {
+              'type' : zonetype,
+              'areas' : areabitmap,
+              'text' : zonetext
+            }
+            self.zone[zone] = zonedata
+
     def event_loop(self):
         while True:
             try:
@@ -244,7 +287,9 @@ class TexecomConnect:
                 zone_str += ", auto bypassed"
             if zone_bitmap & (1 << 7):
                 zone_str += ", zone masked"
-            print("Zone event message: zone "+str(zone_number)+": "+zone_str)
+            zone_text = self.zone[zone_number]['text']
+            print("Zone event message: zone {:d} '{}' {}".
+              format(zone_number, zone_text, zone_str))
         elif msg_type == tc.MSG_AREAEVENT:
             area_number = ord(payload[0])
             area_state = ord(payload[1])
@@ -315,5 +360,6 @@ if __name__ == '__main__':
     print("login successful")
     tc.set_event_messages()
     tc.get_date_time()
+    tc.get_all_zones()
     tc.s.settimeout(30)
     tc.event_loop()
