@@ -60,6 +60,7 @@ class TexecomConnect:
         self.nextseq = 0
         self.message_handler_func = message_handler_func
         self.print_network_traffic = True
+        self.last_command_time = 0
         self.zone = {}
 
     def hexstr(self,s):
@@ -67,6 +68,8 @@ class TexecomConnect:
 
     def connect(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # 2-3 seconds is mentioned in section 5.5 of protocol specification
+        self.s.settimeout(2)
         self.s.connect((self.host, self.port))
         # if we send the login message to fast the panel ignores it; texecom
         # recommend 500ms, see:
@@ -108,7 +111,7 @@ class TexecomConnect:
                 return None
             # FIXME: check seq
             # FIXME: check we received the full expected length
-            # FIXME: add a timeout to recv(), if panel takes over 1second to finish sending something is probably wrong
+            # FIXME: if panel takes over 2 second to reply probably something is wrong and we need to resend the command with same sequence number
             if msg_type == self.HEADER_TYPE_COMMAND:
                 print("received command unexpectedly")
                 return None
@@ -123,6 +126,7 @@ class TexecomConnect:
         if self.print_network_traffic:
             print("Sending command:")
             hexdump.hexdump(data)
+        self.last_command_time = time.time()
         self.s.send(data)
         
     def login(self, udl):
@@ -259,13 +263,16 @@ class TexecomConnect:
                 payload = tc.recvresponse()
         
             except socket.timeout:
-                # send any message to reset the panel's 60 second timeout
-                result = tc.get_lcd_display()
-                if result == None:
-                    print("Failure of 'get date time' is usually unrecoverable; exiting")
-                    print("This may be due to a monitor only latch key; see http://texecom.websitetoolbox.com/post?id=9678400&trail=30")
-                    # TODO could just reconnect
-                    sys.exit(1)
+                # FIXME: should this be in recvresponse?
+                assert self.last_command_time > 0
+                time_since_last_command = time.time() - self.last_command_time
+                if time_since_last_command > 30:
+                    # send any message to reset the panel's 60 second timeout
+                    result = tc.get_date_time()
+                    if result == None:
+                        print("'get date time' failed; exiting")
+                        # TODO could just reconnect
+                        sys.exit(1)
 
     def debug_print_message(self, payload):
         msg_type,payload = payload[0],payload[1:]
@@ -368,5 +375,4 @@ if __name__ == '__main__':
     tc.set_event_messages()
     tc.get_date_time()
     tc.get_all_zones()
-    tc.s.settimeout(30)
     tc.event_loop()
