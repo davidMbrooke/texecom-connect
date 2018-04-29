@@ -156,7 +156,7 @@ class TexecomConnect:
         OUTPUT_EVENT_FLAG = 1<<3
         USER_EVENT_FLAG = 1<<4
         LOG_FLAG = 1<<5
-        events = ZONE_EVENT_FLAG | AREA_EVENT_FLAG | USER_EVENT_FLAG
+        events = ZONE_EVENT_FLAG | AREA_EVENT_FLAG | OUTPUT_EVENT_FLAG | USER_EVENT_FLAG | LOG_FLAG
         body = self.CMD_SETEVENTMESSAGES+chr(events & 0xff)+chr(events >> 8)
         self.sendcommand(body)
         payload=self.recvresponse()
