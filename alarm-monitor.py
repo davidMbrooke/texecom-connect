@@ -89,6 +89,10 @@ class TexecomConnect:
             if self.print_network_traffic:
                 print("Received message header:")
                 hexdump.hexdump(header)
+            if header == "+++":
+                print("Panel has forcibly dropped connection, possibly due to inactivity")
+                self.s = None
+                return None
             msg_start,msg_type,msg_length,msg_sequence = list(header)
             payload = self.s.recv(ord(msg_length) - self.LENGTH_HEADER)
             if self.print_network_traffic:
@@ -170,6 +174,9 @@ class TexecomConnect:
         response=self.recvresponse()
         commandid,payload = response[0],response[1:]
         if commandid != cmd:
+            if commandid == self.CMD_LOGIN and payload[0] == self.CMD_RESPONSE_NAK:
+                print("Received 'Log on NAK' from panel - session has timed out and needs to be restarted")
+                return None
             print("Got response for wrong command id: Expected "+hex(ord(cmd))+", got "+hex(ord(commandid)))
             print("Payload: "+self.hexstr(payload))
             return None
