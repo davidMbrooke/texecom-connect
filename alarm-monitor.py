@@ -24,6 +24,7 @@ import socket
 import time
 import os
 import sys
+import re
 
 import crcmod
 import hexdump
@@ -43,6 +44,8 @@ class TexecomConnect:
     CMD_GETDATETIME = chr(23)
     CMD_SETEVENTMESSAGES = chr(37)
     
+    ZONETYPE_UNUSED = 0
+
     CMD_RESPONSE_ACK = '\x06'
     CMD_RESPONSE_NAK = '\x15'
     
@@ -231,9 +234,12 @@ class TexecomConnect:
             print("Payload: "+self.hexstr(payload))
             return None
         zonetype, areabitmap, zonetext = ord(details[0]), ord(details[1]), details[2:]
-        zonetext = zonetext.strip(" \x00")
-        print("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
-              format(zone, zonetype, areabitmap, zonetext))
+        zonetext = zonetext.replace("\x00", " ")
+        zonetext = re.sub(r'\W+', ' ', zonetext)
+        zonetext = zonetext.strip()
+        if zonetype != self.ZONETYPE_UNUSED:
+            print("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
+                format(zone, zonetype, areabitmap, zonetext))
         return (zonetype, areabitmap, zonetext)
 
     def get_all_zones(self):
@@ -375,4 +381,5 @@ if __name__ == '__main__':
     tc.set_event_messages()
     tc.get_date_time()
     tc.get_all_zones()
+    print("Got all zones; waiting for events")
     tc.event_loop()
