@@ -160,17 +160,15 @@ class TexecomConnect:
         USER_EVENT_FLAG = 1<<4
         LOG_FLAG = 1<<5
         events = ZONE_EVENT_FLAG | AREA_EVENT_FLAG | OUTPUT_EVENT_FLAG | USER_EVENT_FLAG | LOG_FLAG
-        body = self.CMD_SETEVENTMESSAGES+chr(events & 0xff)+chr(events >> 8)
-        self.sendcommand(body)
-        payload=self.recvresponse()
-        print("set event messages response payload is: "+self.hexstr(payload))
-        commandid,response = list(payload)
-        if commandid != self.CMD_SETEVENTMESSAGES:
-            print("Got response for wrong command id: "+hex(ord(commandid)))
+        body = chr(events & 0xff)+chr(events >> 8)
+        response = self.send_command_and_get_response(self.CMD_SETEVENTMESSAGES, body)
         if response == self.CMD_RESPONSE_NAK:
             print("NAK response from panel")
+            return False
         elif response != self.CMD_RESPONSE_ACK:
             print("unexpected ack payload: "+hex(ord(response)))
+            return False
+        return True
 
     def send_command_and_get_response(self, cmd, body):
         if body:
@@ -378,7 +376,9 @@ if __name__ == '__main__':
         print("Login failed - udl password incorrect or pre-v4 panel, exiting.")
         sys.exit(1)
     print("login successful")
-    tc.set_event_messages()
+    if not tc.set_event_messages():
+        print("Set event messages failed, exiting.")
+        sys.exit(1)
     tc.get_date_time()
     tc.get_all_zones()
     print("Got all zones; waiting for events")
