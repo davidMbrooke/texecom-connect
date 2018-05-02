@@ -123,7 +123,7 @@ class TexecomConnect:
             elif msg_type == self.HEADER_TYPE_MESSAGE:
                 self.message_handler_func(payload)
     
-    def sendcommand(self, body):
+    def sendcommandbody(self, body):
         data = self.HEADER_START+self.HEADER_TYPE_COMMAND+chr(len(body)+5)+chr(self.getnextseq())+body
         data += chr(self.crc8_func(data))
         if self.print_network_traffic:
@@ -133,17 +133,7 @@ class TexecomConnect:
         self.s.send(data)
         
     def login(self, udl):
-        body = self.CMD_LOGIN+udl
-        self.sendcommand(body)
-        payload=self.recvresponse()
-        if payload == None:
-            print("Invalid response to login command; try again.")
-            return False
-        print("login response payload is: "+self.hexstr(payload))
-        commandid,response = list(payload)
-        if commandid != self.CMD_LOGIN:
-            print("Got response for wrong command id: "+hex(ord(commandid)))
-            return False
+        response = self.sendcommand(self.CMD_LOGIN, udl)
         if response == self.CMD_RESPONSE_NAK:
             print("NAK response from panel")
             return False
@@ -161,7 +151,7 @@ class TexecomConnect:
         LOG_FLAG = 1<<5
         events = ZONE_EVENT_FLAG | AREA_EVENT_FLAG | OUTPUT_EVENT_FLAG | USER_EVENT_FLAG | LOG_FLAG
         body = chr(events & 0xff)+chr(events >> 8)
-        response = self.send_command_and_get_response(self.CMD_SETEVENTMESSAGES, body)
+        response = self.sendcommand(self.CMD_SETEVENTMESSAGES, body)
         if response == self.CMD_RESPONSE_NAK:
             print("NAK response from panel")
             return False
@@ -170,12 +160,12 @@ class TexecomConnect:
             return False
         return True
 
-    def send_command_and_get_response(self, cmd, body):
+    def sendcommand(self, cmd, body):
         if body:
             body = cmd+body
         else:
             body = cmd
-        self.sendcommand(body)
+        self.sendcommandbody(body)
         response=self.recvresponse()
         commandid,payload = response[0],response[1:]
         if commandid != cmd:
@@ -188,7 +178,7 @@ class TexecomConnect:
         return payload
 
     def get_date_time(self):
-        datetime = self.send_command_and_get_response(self.CMD_GETDATETIME, None)
+        datetime = self.sendcommand(self.CMD_GETDATETIME, None)
         if datetime == None:
             return None
         if len(datetime) < 6:
@@ -201,7 +191,7 @@ class TexecomConnect:
         return datetimestr
 
     def get_lcd_display(self):
-        lcddisplay = self.send_command_and_get_response(self.CMD_GETLCDDISPLAY, None)
+        lcddisplay = self.sendcommand(self.CMD_GETLCDDISPLAY, None)
         if lcddisplay == None:
             return None
         if len(lcddisplay) != 32:
@@ -212,7 +202,7 @@ class TexecomConnect:
         return lcddisplay
 
     def get_panel_identification(self):
-        panelid = self.send_command_and_get_response(self.CMD_GETPANELIDENTIFICATION, None)
+        panelid = self.sendcommand(self.CMD_GETPANELIDENTIFICATION, None)
         if panelid == None:
             return None
         if len(panelid) != 32:
@@ -224,7 +214,7 @@ class TexecomConnect:
 
     def get_zone_details(self, zone):
         # FIXME: length of command & response varies depending on number of zones/areas on panel
-        details = self.send_command_and_get_response(self.CMD_GETZONEDETAILS, chr(zone))
+        details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zone))
         if details == None:
             return None
         if len(details) < 34:
