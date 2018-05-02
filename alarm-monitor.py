@@ -62,7 +62,7 @@ class TexecomConnect:
         self.crc8_func = crcmod.mkCrcFun(poly=0x185, rev=False, initCrc=0xff)
         self.nextseq = 0
         self.message_handler_func = message_handler_func
-        self.print_network_traffic = True
+        self.print_network_traffic = False
         self.last_command_time = 0
         self.zone = {}
 
