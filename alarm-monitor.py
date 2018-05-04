@@ -64,6 +64,7 @@ class TexecomConnect:
         self.message_handler_func = message_handler_func
         self.print_network_traffic = False
         self.last_command_time = 0
+        self.last_received_seq = -1
         self.zone = {}
 
     def hexstr(self,s):
@@ -116,7 +117,21 @@ class TexecomConnect:
             if msg_crc != expected_crc:
                 print("crc: expected="+str(expected_crc)+" actual="+str(msg_crc))
                 return None
-            # FIXME: check seq
+            if msg_type == self.HEADER_TYPE_RESPONSE:
+                if msg_sequence != self.last_sequence:
+                    print("response seq: expected="+str(self.last_sequence)+" actual="+str(msg_sequence))
+                    # FIXME: send command again
+                    return None
+            elif msg_type == self.HEADER_TYPE_MESSAGE:
+                if self.last_received_seq != -1:
+                    next_msg_seq = self.last_received_seq + 1
+                    if next_msg_seq == 256:
+                        next_msg_seq = 0
+                    if msg_sequence != chr(next_msg_seq):
+                        print("message seq: expected="+str(next_msg_seq)+" actual="+str(msg_sequence))
+                        # should maybe process anyway unless it looks like a dup?
+                        return None
+                self.last_received_seq = ord(msg_sequence)
             # FIXME: check we received the full expected length
             # FIXME: if panel takes over 2 second to reply probably something is wrong and we need to resend the command with same sequence number
             if msg_type == self.HEADER_TYPE_COMMAND:
@@ -128,14 +143,17 @@ class TexecomConnect:
                 self.message_handler_func(payload)
     
     def sendcommandbody(self, body):
-        data = self.HEADER_START+self.HEADER_TYPE_COMMAND+chr(len(body)+5)+chr(self.getnextseq())+body
+        self.last_sequence = chr(self.getnextseq())
+        data = self.HEADER_START+self.HEADER_TYPE_COMMAND+\
+          chr(len(body)+5)+self.last_sequence+body
         data += chr(self.crc8_func(data))
         if self.print_network_traffic:
             print("Sending command:")
             hexdump.hexdump(data)
-        self.last_command_time = time.time()
         self.s.send(data)
-        
+        self.last_command_time = time.time()
+        self.last_command = data
+
     def login(self, udl):
         response = self.sendcommand(self.CMD_LOGIN, udl)
         if response == self.CMD_RESPONSE_NAK:
@@ -170,7 +188,20 @@ class TexecomConnect:
         else:
             body = cmd
         self.sendcommandbody(body)
-        response=self.recvresponse()
+        retries = 3
+        while retries > 0:
+            retries -= 1
+            try:
+                response=self.recvresponse()
+                break
+            except socket.timeout:
+                # FIXME: this maybe isn't quite right as if we get multiple
+                # events from the panel that will delay us resending until
+                # we don't get any events for 2 second
+                print("Timeout waiting for response, resending last command")
+                # NB: sequence number will be the same as last attempt
+                self.s.send(self.last_command)
+
         commandid,payload = response[0],response[1:]
         if commandid != cmd:
             if commandid == self.CMD_LOGIN and payload[0] == self.CMD_RESPONSE_NAK:
