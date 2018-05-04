@@ -261,7 +261,9 @@ class TexecomConnect:
                 payload = tc.recvresponse()
         
             except socket.timeout:
-                # FIXME: should this be in recvresponse?
+                # FIXME: this should be in recvresponse, otherwise we
+                # won't send if we get a continual stream of events from the
+                # panels
                 assert self.last_command_time > 0
                 time_since_last_command = time.time() - self.last_command_time
                 if time_since_last_command > 30:
