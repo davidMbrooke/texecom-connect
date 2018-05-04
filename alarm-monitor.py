@@ -72,6 +72,10 @@ class TexecomConnect:
     def connect(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # 2-3 seconds is mentioned in section 5.5 of protocol specification
+        # Increasing this value is not recommended as it will mean if the
+        # panel fails to respond to a command (as it sometimes does it it
+        # sends an event at the same time we send a command) it will take
+        # longer for us to realise and resend the command
         self.s.settimeout(2)
         self.s.connect((self.host, self.port))
         # if we send the login message to fast the panel ignores it; texecom
