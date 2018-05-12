@@ -309,10 +309,10 @@ class TexecomConnect:
                         # TODO could just reconnect
                         sys.exit(1)
 
-    def debug_print_message(self, payload):
+    def decode_message_to_text(self, payload):
         msg_type,payload = payload[0],payload[1:]
         if msg_type == tc.MSG_DEBUG:
-            self.log("Debug message: "+tc.hexstr(payload))
+            return "Debug message: "+tc.hexstr(payload)
         elif msg_type == tc.MSG_ZONEEVENT:
             if len(payload) == 2:
                 zone_number = ord(payload[0])
@@ -321,7 +321,7 @@ class TexecomConnect:
                 zone_number = ord(payload[0])+(ord(payload[1])<<8)
                 zone_bitmap = ord(payload[2])
             else:
-                self.log("unknown payload length")
+                return "unknown zone event message payload length"
             zone_state = zone_bitmap & 0x3
             zone_str = ["secure","active","tamper","short"][zone_bitmap & 0x3]
             if zone_bitmap & (1 << 2):
@@ -337,13 +337,13 @@ class TexecomConnect:
             if zone_bitmap & (1 << 7):
                 zone_str += ", zone masked"
             zone_text = self.zone[zone_number]['text']
-            self.log("Zone event message: zone {:d} '{}' {}".
-              format(zone_number, zone_text, zone_str))
+            return "Zone event message: zone {:d} '{}' {}".\
+              format(zone_number, zone_text, zone_str)
         elif msg_type == tc.MSG_AREAEVENT:
             area_number = ord(payload[0])
             area_state = ord(payload[1])
             area_state_str = ["disarmed", "in exit", "in entry", "armed", "part armed", "in alarm"][area_state]
-            self.log("Area event message: area "+str(area_number)+" "+area_state_str)
+            return "Area event message: area "+str(area_number)+" "+area_state_str
         elif msg_type == tc.MSG_OUTPUTEVENT:
             locations = ["Panel outputs",
             "Digi outputs",
@@ -365,21 +365,21 @@ class TexecomConnect:
             else:
                 output_name = "Network {:d} expander {:d} outputs".\
                   format(output_location >> 4, output_location & 0xf)
-            self.log("Output event message: location {:d}['{}'] now 0x{:02x}".
-              format(output_location, output_name, output_state))
+            return "Output event message: location {:d}['{}'] now 0x{:02x}".\
+              format(output_location, output_name, output_state)
         elif msg_type == tc.MSG_USEREVENT:
             user_number = ord(payload[0])
             user_state = ord(payload[1])
             user_state_str = ["code", "tag", "code+tag"][user_state]
-            self.log("User event message: logon by user {:d} {}".
-              format(user_number, user_state_str))
+            return "User event message: logon by user {:d} {}".\
+              format(user_number, user_state_str)
         elif msg_type == tc.MSG_LOGEVENT:
-            self.log("Log event message: "+tc.hexstr(payload))
+            return "Log event message: "+tc.hexstr(payload)
         else:
-            self.log("unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload))
+            return "unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload)
 
 def message_handler(payload):
-    tc.debug_print_message(payload)
+    tc.log(tc.decode_message_to_text(payload))
     msg_type,payload = payload[0],payload[1:]
     if msg_type == tc.MSG_ZONEEVENT:
         zone_number = ord(payload[0])
