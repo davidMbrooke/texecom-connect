@@ -505,6 +505,7 @@ class TexecomConnect:
             self.zone[zone] = zonedata
 
     def event_loop(self):
+        lastIdleCommand = 0
         while True:
             try:
                 global garage_pir_activated_at
@@ -524,7 +525,15 @@ class TexecomConnect:
                 time_since_last_command = time.time() - self.last_command_time
                 if time_since_last_command > 30:
                     # send any message to reset the panel's 60 second timeout
-                    result = tc.get_date_time()
+                    if lastIdleCommand == 0:
+                        result = tc.get_date_time()
+                    elif lastIdleCommand == 1:
+                        result = tc.get_log_pointer()
+                    else:
+                        result = tc.get_system_power()
+                    lastIdleCommand += 1
+                    if lastIdleCommand == 3:
+                        lastIdleCommand = 0
                     if result == None:
                         self.log("'get date time' failed; exiting")
                         # TODO could just reconnect
