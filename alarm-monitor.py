@@ -252,15 +252,28 @@ class TexecomConnect:
         return panelid
 
     def get_zone_details(self, zone):
-        # FIXME: length of command & response varies depending on number of zones/areas on panel
         details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zone))
         if details == None:
             return None
-        if len(details) < 34:
+        if len(details) == 34:
+            zonetype = ord(details[0])
+            areabitmap = ord(details[1])
+            zonetext = details[2:]
+        elif len(details) == 35:
+            zonetype, areabitmap, zonetext = ord(details[0]), ord(details[1]) + (ord(details[2])<<8), details[3:]
+            zonetype = ord(details[0])
+            areabitmap = ord(details[1]) + (ord(details[2])<<8)
+            zonetext = details[3:]
+        elif len(details) == 41:
+            zonetype = ord(details[0])
+            areabitmap = ord(details[1]) + (ord(details[2])<<8) + (ord(details[3])<<16) + (ord(details[4])<<24) + \
+              (ord(details[5])<<32) + (ord(details[6])<<40) + (ord(details[7])<<48) + (ord(details[8])<<56)
+            zonetext = details[9:]
+        else:
             self.log("GETZONEDETAILS: response wrong length")
             self.log("Payload: "+self.hexstr(payload))
             return None
-        zonetype, areabitmap, zonetext = ord(details[0]), ord(details[1]), details[2:]
+
         zonetext = zonetext.replace("\x00", " ")
         zonetext = re.sub(r'\W+', ' ', zonetext)
         zonetext = zonetext.strip()
