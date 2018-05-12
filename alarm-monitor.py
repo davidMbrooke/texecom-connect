@@ -597,11 +597,11 @@ def message_handler(payload):
         if zone_number == 73:
             global garage_pir_activated_at
             if zone_state == 1:
-                self.log("Garage PIR activated; running script")
+                tc.log("Garage PIR activated; running script")
                 garage_pir_activated_at=time.time()
                 os.system("./garage-pir.sh 'activated'")
             else:
-                self.log("Garage PIR cleared")
+                tc.log("Garage PIR cleared")
                 garage_pir_activated_at=0
 
 # disable buffering to stdout when it's redirected to a file/pipe
