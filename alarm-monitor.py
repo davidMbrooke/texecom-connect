@@ -183,7 +183,8 @@ class TexecomConnect:
         return True
 
     def log(self, string):
-        print(string)
+        timestamp = time.strftime("%Y-%m-%d %X")
+        print(timestamp + ": " + string)
 
     def sendcommand(self, cmd, body):
         if body:
