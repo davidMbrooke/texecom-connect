@@ -341,10 +341,28 @@ class TexecomConnect:
             area_state_str = ["disarmed", "in exit", "in entry", "armed", "part armed", "in alarm"][area_state]
             print("Area event message: area "+str(area_number)+" "+area_state_str)
         elif msg_type == tc.MSG_OUTPUTEVENT:
+            locations = ["Panel outputs",
+            "Digi outputs",
+            "Digi Channel low 8",
+            "Digi Channel high 8",
+            "Redcare outputs",
+            "Custom outputs 1",
+            "Custom outputs 2",
+            "Custom outputs 3",
+            "Custom outputs 4",
+            "X-10 outputs"]
             output_location = ord(payload[0])
             output_state = ord(payload[1])
-            print("Output event message: location {:d} now 0x{:02x}".
-              format(output_location, output_state))
+            if output_location < len(locations):
+                output_name = locations[output_location]
+            elif (output_location & 0xf) == 0:
+                output_name = "Network {:d} keypad outputs".\
+                  format(output_location >> 4, output_location & 0xf)
+            else:
+                output_name = "Network {:d} expander {:d} outputs".\
+                  format(output_location >> 4, output_location & 0xf)
+            print("Output event message: location {:d}['{}'] now 0x{:02x}".
+              format(output_location, output_name, output_state))
         elif msg_type == tc.MSG_USEREVENT:
             user_number = ord(payload[0])
             user_state = ord(payload[1])
