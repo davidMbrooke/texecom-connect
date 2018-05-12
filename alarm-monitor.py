@@ -41,6 +41,7 @@ class TexecomConnect:
     CMD_LOGIN = chr(1)
     CMD_GETZONEDETAILS = chr(3)
     CMD_GETLCDDISPLAY = chr(13)
+    CMD_GETLOGPOINTER = chr(15)
     CMD_GETPANELIDENTIFICATION = chr(22)
     CMD_GETDATETIME = chr(23)
     CMD_GETSYSTEMPOWER = chr(25)
@@ -411,6 +412,18 @@ class TexecomConnect:
         self.log("Panel LCD display: "+lcddisplay)
         return lcddisplay
 
+    def get_log_pointer(self):
+        logpointerresp = self.sendcommand(self.CMD_GETLOGPOINTER, None)
+        if logpointerresp == None:
+            return None
+        if len(logpointerresp) != 2:
+            self.log("GETLOGPOINTER: response wrong length")
+            self.log("Payload: "+self.hexstr(logpointerresp))
+            return None
+        logpointer = ord(logpointerresp[0]) + (ord(logpointerresp[1])<<8)
+        self.log("Log pointer: {:d}".format(logpointer))
+        return logpointer
+
     def get_panel_identification(self):
         panelid = self.sendcommand(self.CMD_GETPANELIDENTIFICATION, None)
         if panelid == None:
@@ -672,6 +685,7 @@ if __name__ == '__main__':
         sys.exit(1)
     tc.get_date_time()
     tc.get_system_power()
+    tc.get_log_pointer()
     tc.get_all_zones()
     print("Got all zones; waiting for events")
     tc.event_loop()
