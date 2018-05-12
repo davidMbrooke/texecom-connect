@@ -98,28 +98,28 @@ class TexecomConnect:
         while True:
             header = self.s.recv(self.LENGTH_HEADER)
             if self.print_network_traffic:
-                print("Received message header:")
+                self.log("Received message header:")
                 hexdump.hexdump(header)
             if header == "+++":
-                print("Panel has forcibly dropped connection, possibly due to inactivity")
+                self.log("Panel has forcibly dropped connection, possibly due to inactivity")
                 self.s = None
                 return None
             msg_start,msg_type,msg_length,msg_sequence = list(header)
             payload = self.s.recv(ord(msg_length) - self.LENGTH_HEADER)
             if self.print_network_traffic:
-                print("Received message payload:")
+                self.log("Received message payload:")
                 hexdump.hexdump(payload)
             payload, msg_crc = payload[:-1], ord(payload[-1])
             expected_crc = self.crc8_func(header+payload)
             if msg_start != 't':
-                print("unexpected msg start: "+hex(ord(msg_start)))
+                self.log("unexpected msg start: "+hex(ord(msg_start)))
                 return None
             if msg_crc != expected_crc:
-                print("crc: expected="+str(expected_crc)+" actual="+str(msg_crc))
+                self.log("crc: expected="+str(expected_crc)+" actual="+str(msg_crc))
                 return None
             if msg_type == self.HEADER_TYPE_RESPONSE:
                 if msg_sequence != self.last_sequence:
-                    print("response seq: expected="+str(self.last_sequence)+" actual="+str(msg_sequence))
+                    self.log("response seq: expected="+str(self.last_sequence)+" actual="+str(msg_sequence))
                     # FIXME: send command again
                     return None
             elif msg_type == self.HEADER_TYPE_MESSAGE:
@@ -128,14 +128,14 @@ class TexecomConnect:
                     if next_msg_seq == 256:
                         next_msg_seq = 0
                     if msg_sequence != chr(next_msg_seq):
-                        print("message seq: expected="+str(next_msg_seq)+" actual="+str(msg_sequence))
+                        self.log("message seq: expected="+str(next_msg_seq)+" actual="+str(msg_sequence))
                         # should maybe process anyway unless it looks like a dup?
                         return None
                 self.last_received_seq = ord(msg_sequence)
             # FIXME: check we received the full expected length
             # FIXME: if panel takes over 2 second to reply probably something is wrong and we need to resend the command with same sequence number
             if msg_type == self.HEADER_TYPE_COMMAND:
-                print("received command unexpectedly")
+                self.log("received command unexpectedly")
                 return None
             elif msg_type == self.HEADER_TYPE_RESPONSE:
                 return payload
@@ -148,7 +148,7 @@ class TexecomConnect:
           chr(len(body)+5)+self.last_sequence+body
         data += chr(self.crc8_func(data))
         if self.print_network_traffic:
-            print("Sending command:")
+            self.log("Sending command:")
             hexdump.hexdump(data)
         self.s.send(data)
         self.last_command_time = time.time()
@@ -157,10 +157,10 @@ class TexecomConnect:
     def login(self, udl):
         response = self.sendcommand(self.CMD_LOGIN, udl)
         if response == self.CMD_RESPONSE_NAK:
-            print("NAK response from panel")
+            self.log("NAK response from panel")
             return False
         elif response != self.CMD_RESPONSE_ACK:
-            print("unexpected ack payload: "+hex(ord(response)))
+            self.log("unexpected ack payload: "+hex(ord(response)))
             return False
         return True
 
@@ -175,12 +175,15 @@ class TexecomConnect:
         body = chr(events & 0xff)+chr(events >> 8)
         response = self.sendcommand(self.CMD_SETEVENTMESSAGES, body)
         if response == self.CMD_RESPONSE_NAK:
-            print("NAK response from panel")
+            self.log("NAK response from panel")
             return False
         elif response != self.CMD_RESPONSE_ACK:
-            print("unexpected ack payload: "+hex(ord(response)))
+            self.log("unexpected ack payload: "+hex(ord(response)))
             return False
         return True
+
+    def log(self, string):
+        print(string)
 
     def sendcommand(self, cmd, body):
         if body:
@@ -198,17 +201,17 @@ class TexecomConnect:
                 # FIXME: this maybe isn't quite right as if we get multiple
                 # events from the panel that will delay us resending until
                 # we don't get any events for 2 second
-                print("Timeout waiting for response, resending last command")
+                self.log("Timeout waiting for response, resending last command")
                 # NB: sequence number will be the same as last attempt
                 self.s.send(self.last_command)
 
         commandid,payload = response[0],response[1:]
         if commandid != cmd:
             if commandid == self.CMD_LOGIN and payload[0] == self.CMD_RESPONSE_NAK:
-                print("Received 'Log on NAK' from panel - session has timed out and needs to be restarted")
+                self.log("Received 'Log on NAK' from panel - session has timed out and needs to be restarted")
                 return None
-            print("Got response for wrong command id: Expected "+hex(ord(cmd))+", got "+hex(ord(commandid)))
-            print("Payload: "+self.hexstr(payload))
+            self.log("Got response for wrong command id: Expected "+hex(ord(cmd))+", got "+hex(ord(commandid)))
+            self.log("Payload: "+self.hexstr(payload))
             return None
         return payload
 
@@ -217,12 +220,12 @@ class TexecomConnect:
         if datetime == None:
             return None
         if len(datetime) < 6:
-            print("GETDATETIME: response too short")
-            print("Payload: "+self.hexstr(payload))
+            self.log("GETDATETIME: response too short")
+            self.log("Payload: "+self.hexstr(payload))
             return None
         datetime = bytearray(datetime)
         datetimestr = '20{2:02d}/{1:02d}/{0:02d} {3:02d}:{4:02d}:{5:02d}'.format(*datetime)
-        print("Panel date/time: "+datetimestr)
+        self.log("Panel date/time: "+datetimestr)
         return datetimestr
 
     def get_lcd_display(self):
@@ -230,10 +233,10 @@ class TexecomConnect:
         if lcddisplay == None:
             return None
         if len(lcddisplay) != 32:
-            print("GETLCDDISPLAY: response wrong length")
-            print("Payload: "+self.hexstr(payload))
+            self.log("GETLCDDISPLAY: response wrong length")
+            self.log("Payload: "+self.hexstr(payload))
             return None
-        print("Panel LCD display: "+lcddisplay)
+        self.log("Panel LCD display: "+lcddisplay)
         return lcddisplay
 
     def get_panel_identification(self):
@@ -241,10 +244,10 @@ class TexecomConnect:
         if panelid == None:
             return None
         if len(panelid) != 32:
-            print("GETPANELIDENTIFICATION: response wrong length")
-            print("Payload: "+self.hexstr(payload))
+            self.log("GETPANELIDENTIFICATION: response wrong length")
+            self.log("Payload: "+self.hexstr(payload))
             return None
-        print("Panel identification: "+panelid)
+        self.log("Panel identification: "+panelid)
         return panelid
 
     def get_zone_details(self, zone):
@@ -253,15 +256,15 @@ class TexecomConnect:
         if details == None:
             return None
         if len(details) < 34:
-            print("GETZONEDETAILS: response wrong length")
-            print("Payload: "+self.hexstr(payload))
+            self.log("GETZONEDETAILS: response wrong length")
+            self.log("Payload: "+self.hexstr(payload))
             return None
         zonetype, areabitmap, zonetext = ord(details[0]), ord(details[1]), details[2:]
         zonetext = zonetext.replace("\x00", " ")
         zonetext = re.sub(r'\W+', ' ', zonetext)
         zonetext = zonetext.strip()
         if zonetype != self.ZONETYPE_UNUSED:
-            print("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
+            self.log("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
                 format(zone, zonetype, areabitmap, zonetext))
         return (zonetype, areabitmap, zonetext)
 
@@ -285,7 +288,7 @@ class TexecomConnect:
                 global garage_pir_activated_at
                 if garage_pir_activated_at > 0:
                     active_for = time.time() - garage_pir_activated_at
-                    print("Garage PIR active for {:.1f} minutes".format(active_for/60))
+                    self.log("Garage PIR active for {:.1f} minutes".format(active_for/60))
                     if active_for > 4*60:
                         garage_pir_activated_at=time.time()
                         os.system("./garage-pir.sh 'still active'")
@@ -301,14 +304,14 @@ class TexecomConnect:
                     # send any message to reset the panel's 60 second timeout
                     result = tc.get_date_time()
                     if result == None:
-                        print("'get date time' failed; exiting")
+                        self.log("'get date time' failed; exiting")
                         # TODO could just reconnect
                         sys.exit(1)
 
     def debug_print_message(self, payload):
         msg_type,payload = payload[0],payload[1:]
         if msg_type == tc.MSG_DEBUG:
-            print("Debug message: "+tc.hexstr(payload))
+            self.log("Debug message: "+tc.hexstr(payload))
         elif msg_type == tc.MSG_ZONEEVENT:
             if len(payload) == 2:
                 zone_number = ord(payload[0])
@@ -317,7 +320,7 @@ class TexecomConnect:
                 zone_number = ord(payload[0])+(ord(payload[1])<<8)
                 zone_bitmap = ord(payload[2])
             else:
-                print("unknown payload length")
+                self.log("unknown payload length")
             zone_state = zone_bitmap & 0x3
             zone_str = ["secure","active","tamper","short"][zone_bitmap & 0x3]
             if zone_bitmap & (1 << 2):
@@ -333,13 +336,13 @@ class TexecomConnect:
             if zone_bitmap & (1 << 7):
                 zone_str += ", zone masked"
             zone_text = self.zone[zone_number]['text']
-            print("Zone event message: zone {:d} '{}' {}".
+            self.log("Zone event message: zone {:d} '{}' {}".
               format(zone_number, zone_text, zone_str))
         elif msg_type == tc.MSG_AREAEVENT:
             area_number = ord(payload[0])
             area_state = ord(payload[1])
             area_state_str = ["disarmed", "in exit", "in entry", "armed", "part armed", "in alarm"][area_state]
-            print("Area event message: area "+str(area_number)+" "+area_state_str)
+            self.log("Area event message: area "+str(area_number)+" "+area_state_str)
         elif msg_type == tc.MSG_OUTPUTEVENT:
             locations = ["Panel outputs",
             "Digi outputs",
@@ -361,18 +364,18 @@ class TexecomConnect:
             else:
                 output_name = "Network {:d} expander {:d} outputs".\
                   format(output_location >> 4, output_location & 0xf)
-            print("Output event message: location {:d}['{}'] now 0x{:02x}".
+            self.log("Output event message: location {:d}['{}'] now 0x{:02x}".
               format(output_location, output_name, output_state))
         elif msg_type == tc.MSG_USEREVENT:
             user_number = ord(payload[0])
             user_state = ord(payload[1])
             user_state_str = ["code", "tag", "code+tag"][user_state]
-            print("User event message: logon by user {:d} {}".
+            self.log("User event message: logon by user {:d} {}".
               format(user_number, user_state_str))
         elif msg_type == tc.MSG_LOGEVENT:
-            print("Log event message: "+tc.hexstr(payload))
+            self.log("Log event message: "+tc.hexstr(payload))
         else:
-            print("unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload))
+            self.log("unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload))
 
 def message_handler(payload):
     tc.debug_print_message(payload)
@@ -384,11 +387,11 @@ def message_handler(payload):
         if zone_number == 73:
             global garage_pir_activated_at
             if zone_state == 1:
-                print("Garage PIR activated; running script")
+                self.log("Garage PIR activated; running script")
                 garage_pir_activated_at=time.time()
                 os.system("./garage-pir.sh 'activated'")
             else:
-                print("Garage PIR cleared")
+                self.log("Garage PIR cleared")
                 garage_pir_activated_at=0
 
 # disable buffering to stdout when it's redirected to a file/pipe
