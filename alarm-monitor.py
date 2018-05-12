@@ -385,7 +385,7 @@ class TexecomConnect:
             return None
         if len(datetime) < 6:
             self.log("GETDATETIME: response too short")
-            self.log("Payload: "+self.hexstr(payload))
+            self.log("Payload: "+self.hexstr(datetime))
             return None
         datetime = bytearray(datetime)
         datetimestr = '20{2:02d}/{1:02d}/{0:02d} {3:02d}:{4:02d}:{5:02d}'.format(*datetime)
@@ -398,7 +398,7 @@ class TexecomConnect:
             return None
         if len(lcddisplay) != 32:
             self.log("GETLCDDISPLAY: response wrong length")
-            self.log("Payload: "+self.hexstr(payload))
+            self.log("Payload: "+self.hexstr(lcddisplay))
             return None
         self.log("Panel LCD display: "+lcddisplay)
         return lcddisplay
@@ -409,7 +409,7 @@ class TexecomConnect:
             return None
         if len(panelid) != 32:
             self.log("GETPANELIDENTIFICATION: response wrong length")
-            self.log("Payload: "+self.hexstr(payload))
+            self.log("Payload: "+self.hexstr(panelid))
             return None
         self.log("Panel identification: "+panelid)
         return panelid
@@ -434,7 +434,7 @@ class TexecomConnect:
             zonetext = details[9:]
         else:
             self.log("GETZONEDETAILS: response wrong length")
-            self.log("Payload: "+self.hexstr(payload))
+            self.log("Payload: "+self.hexstr(details))
             return None
 
         zonetext = zonetext.replace("\x00", " ")
