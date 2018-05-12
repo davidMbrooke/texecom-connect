@@ -55,6 +55,168 @@ class TexecomConnect:
     MSG_OUTPUTEVENT = chr(3)
     MSG_USEREVENT = chr(4)
     MSG_LOGEVENT = chr(5)
+
+    log_event_types = {}
+    log_event_types[1]="Entry/Exit 1"
+    log_event_types[2]="Entry/Exit 2"
+    log_event_types[3]="Interior"
+    log_event_types[4]="Perimeter"
+    log_event_types[5]="24hr Audible"
+    log_event_types[6]="24hr Silent"
+    log_event_types[7]="Audible PA"
+    log_event_types[8]="Silent PA"
+    log_event_types[9]="Fire Alarm"
+    log_event_types[10]="Medical"
+    log_event_types[11]="24Hr Gas Alarm"
+    log_event_types[12]="Auxiliary Alarm"
+    log_event_types[13]="24hr Tamper Alarm"
+    log_event_types[14]="Exit Terminator"
+    log_event_types[15]="Keyswitch - Momentary"
+    log_event_types[16]="Keyswitch - Latching"
+    log_event_types[17]="Security Key"
+    log_event_types[18]="Omit Key"
+    log_event_types[19]="Custom Alarm"
+    log_event_types[20]="Confirmed PA Audible"
+    log_event_types[21]="Confirmed PA Audible"
+    log_event_types[22]="Keypad Medical"
+    log_event_types[23]="Keypad Fire"
+    log_event_types[24]="Keypad Audible PA"
+    log_event_types[25]="Keypad Silent PA"
+    log_event_types[26]="Duress Code Alarm"
+    log_event_types[27]="Alarm Active"
+    log_event_types[28]="Bell Active"
+    log_event_types[29]="Re-arm"
+    log_event_types[30]="Verified Cross Zone Alarm"
+    log_event_types[31]="User Code"
+    log_event_types[32]="Exit Started"
+    log_event_types[33]="Exit Error (Arming Failed)"
+    log_event_types[34]="Entry Started"
+    log_event_types[35]="Part Arm Suite"
+    log_event_types[36]="Armed with Line Fault"
+    log_event_types[37]="Open/Close (Away Armed)"
+    log_event_types[38]="Part Armed"
+    log_event_types[39]="Auto Open/Close"
+    log_event_types[40]="Auto Arm Deferred"
+    log_event_types[41]="Open After Alarm (Alarm Abort)"
+    log_event_types[42]="Remote Open/Close"
+    log_event_types[43]="Quick Arm"
+    log_event_types[44]="Recent Closing"
+    log_event_types[45]="Reset After Alarm"
+    log_event_types[46]="Power O/P Fault"
+    log_event_types[47]="AC Fail"
+    log_event_types[48]="Low Battery"
+    log_event_types[49]="System Power Up"
+    log_event_types[50]="Mains Over Voltage"
+    log_event_types[51]="Telephone Line Fault"
+    log_event_types[52]="Fail to Communicate"
+    log_event_types[53]="Download Start"
+    log_event_types[54]="Download End"
+    log_event_types[55]="Log Capacity Alert (80%)"
+    log_event_types[56]="Date Changed"
+    log_event_types[57]="Time Changed"
+    log_event_types[58]="Installer Programming Start"
+    log_event_types[59]="Installer Programming End"
+    log_event_types[60]="Panel Box Tamper"
+    log_event_types[61]="Bell Tamper"
+    log_event_types[62]="Auxiliary Tamper"
+    log_event_types[63]="Expander Tamper"
+    log_event_types[64]="Keypad Tamper"
+    log_event_types[65]="Expander Trouble (Network error)"
+    log_event_types[66]="Remote Keypad Trouble (Network error)"
+    log_event_types[67]="Fire Zone Tamper"
+    log_event_types[68]="Zone Tamper"
+    log_event_types[69]="Keypad Lockout"
+    log_event_types[70]="Code Tamper Alarm"
+    log_event_types[71]="Soak Test Alarm"
+    log_event_types[72]="Manual Test Transmission"
+    log_event_types[73]="Automatic Test Transmission"
+    log_event_types[74]="User Walk Test Start/End"
+    log_event_types[75]="NVM Defaults Loaded"
+    log_event_types[76]="First Knock"
+    log_event_types[77]="Door Access"
+    log_event_types[78]="Part Arm 1"
+    log_event_types[79]="Part Arm 2"
+    log_event_types[80]="Part Arm 3"
+    log_event_types[81]="Auto Arming Started"
+    log_event_types[82]="Confirmed Alarm"
+    log_event_types[83]="Prox Tag"
+    log_event_types[84]="Access Code Changed/Deleted"
+    log_event_types[85]="Arm Failed"
+    log_event_types[86]="Log Cleared"
+    log_event_types[87]="iD Loop Shorted"
+    log_event_types[88]="Communication Port"
+    log_event_types[89]="TAG System Exit (Batt. OK)"
+    log_event_types[90]="TAG System Exit (Batt. LOW)"
+    log_event_types[91]="TAG System Entry (Batt. OK)"
+    log_event_types[92]="TAG System Entry (Batt. LOW)"
+    log_event_types[93]="Microphone Activated"
+    log_event_types[94]="AV Cleared Down"
+    log_event_types[95]="Monitored Alarm"
+    log_event_types[96]="Expander Low Voltage"
+    log_event_types[97]="Supervision Fault"
+    log_event_types[98]="PA from Remote FOB"
+    log_event_types[99]="RF Device Low Battery"
+    log_event_types[100]="Site Data Changed"
+    log_event_types[101]="Radio Jamming"
+    log_event_types[102]="Test Call Passed"
+    log_event_types[103]="Test Call Failed"
+    log_event_types[104]="Zone Fault"
+    log_event_types[105]="Zone Masked"
+    log_event_types[106]="Faults Overridden"
+    log_event_types[107]="PSU AC Fail"
+    log_event_types[108]="PSU Battery Fail"
+    log_event_types[109]="PSU Low Output Fail"
+    log_event_types[110]="PSU Tamper"
+    log_event_types[111]="Door Access"
+    log_event_types[112]="CIE Reset"
+    log_event_types[113]="Remote Command"
+    log_event_types[114]="User Added"
+    log_event_types[115]="User Deleted"
+    log_event_types[116]="Confirmed PA"
+    log_event_types[117]="User Acknowledged"
+    log_event_types[118]="Power Unit Failure"
+    log_event_types[119]="Battery Charger Fault"
+    log_event_types[120]="Confirmed Intruder"
+    log_event_types[121]="GSM Tamper"
+    log_event_types[122]="Radio Config. Failure"
+
+    log_event_group_type = {}
+    log_event_group_type[0]="Not Reported"
+    log_event_group_type[1]="Priority Alarm"
+    log_event_group_type[2]="Priority Alarm Restore"
+    log_event_group_type[3]="Alarm"
+    log_event_group_type[4]="Restore"
+    log_event_group_type[5]="Open"
+    log_event_group_type[6]="Close"
+    log_event_group_type[7]="Bypassed"
+    log_event_group_type[8]="Unbypassed"
+    log_event_group_type[9]="Maintenance Alarm"
+    log_event_group_type[10]="Maintenance Restore"
+    log_event_group_type[11]="Tamper Alarm"
+    log_event_group_type[12]="Tamper Restore"
+    log_event_group_type[13]="Test Start"
+    log_event_group_type[14]="Test End"
+    log_event_group_type[15]="Disarmed"
+    log_event_group_type[16]="Armed"
+    log_event_group_type[17]="Tested"
+    log_event_group_type[18]="Started"
+    log_event_group_type[19]="Ended"
+    log_event_group_type[20]="Fault"
+    log_event_group_type[21]="Omitted"
+    log_event_group_type[22]="Reinstated"
+    log_event_group_type[23]="Stopped"
+    log_event_group_type[24]="Start"
+    log_event_group_type[25]="Deleted"
+    log_event_group_type[26]="Active"
+    log_event_group_type[27]="Not Used"
+    log_event_group_type[28]="Changed"
+    log_event_group_type[29]="Low Battery"
+    log_event_group_type[30]="Radio"
+    log_event_group_type[31]="Deactivated"
+    log_event_group_type[32]="Added"
+    log_event_group_type[33]="Bad Action"
+    log_event_group_type[34]="PA Timer Reset"
+    log_event_group_type[35]="PA Zone Lockout"
     
     def __init__(self, host, port , message_handler_func):
         self.host = host
@@ -387,7 +549,41 @@ class TexecomConnect:
             return "User event message: logon by user {:d} {}".\
               format(user_number, user_state_str)
         elif msg_type == tc.MSG_LOGEVENT:
-            return "Log event message: "+tc.hexstr(payload)
+            if len(payload) == 8:
+                parameter = ord(payload[2])
+                areas = ord(payload[3])
+                timestamp = payload[4:8]
+            elif len(payload) == 9:
+                # Premier 168 - longer message as 16 bits of area info
+                parameter = ord(payload[2])
+                areas = ord(payload[3])+(ord(payload[8])<<8)
+                timestamp = payload[4:8]
+            elif len(payload) == 10:
+                # Premier 640
+                # I'm unsure if this is correct and I don't have a panel to test with
+                parameter = ord(payload[2])+(ord(payload[3])<<8)
+                areas = ord(payload[4])+(ord(payload[5])<<8)
+                timestamp = payload[6:10]
+            else:
+                return "unknown log event message payload length"
+
+            event_type = ord(payload[0])
+            group_type = ord(payload[1])
+            timestamp_int = ord(timestamp[0]) + (ord(timestamp[1])<<8) + (ord(timestamp[2])<<16) + (ord(timestamp[3])<<24)
+            seconds = timestamp_int & 63
+            minutes = (timestamp_int >> 6) & 63
+            month = (timestamp_int >> 12) & 15
+            hours = (timestamp_int >> 16) & 31
+            day = (timestamp_int >> 21) & 31
+            year = 2000 + ((timestamp_int >> 26) & 63)
+            timestamp_str = "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(year, month, day, hours, minutes, seconds)
+
+            if event_type in self.log_event_types:
+                event_str = self.log_event_types[event_type]
+            else:
+                event_str = "Unknown log event type {:d}".format(event_type)
+
+            return "Log event message: {} {} group type: {:d}  parameter: {:d}   areas: {:d}  hex: {} ".format(timestamp_str, event_str, group_type, parameter, areas, tc.hexstr(payload))
         else:
             return "unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload)
 
