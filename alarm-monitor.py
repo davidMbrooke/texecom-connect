@@ -22,6 +22,7 @@ from __future__ import print_function
 
 import socket
 import time
+import datetime
 import os
 import sys
 import re
@@ -380,16 +381,23 @@ class TexecomConnect:
         return payload
 
     def get_date_time(self):
-        datetime = self.sendcommand(self.CMD_GETDATETIME, None)
-        if datetime == None:
+        datetimeresp = self.sendcommand(self.CMD_GETDATETIME, None)
+        if datetimeresp == None:
             return None
-        if len(datetime) < 6:
+        if len(datetimeresp) < 6:
             self.log("GETDATETIME: response too short")
-            self.log("Payload: "+self.hexstr(datetime))
+            self.log("Payload: "+self.hexstr(datetimeresp))
             return None
-        datetime = bytearray(datetime)
-        datetimestr = '20{2:02d}/{1:02d}/{0:02d} {3:02d}:{4:02d}:{5:02d}'.format(*datetime)
-        self.log("Panel date/time: "+datetimestr)
+        datetimeresp = bytearray(datetimeresp)
+        datetimestr = '20{2:02d}-{1:02d}-{0:02d} {3:02d}:{4:02d}:{5:02d}'.format(*datetimeresp)
+        paneltime = datetime.datetime(2000+datetimeresp[2], datetimeresp[1], datetimeresp[0], *datetimeresp[3:])
+        seconds = int((paneltime - datetime.datetime.now()).total_seconds())
+        diff = ""
+        if seconds > 0:
+            diff = " (panel is ahead by {:d} seconds)".format(seconds)
+        else:
+            diff = " (panel is behind by {:d} seconds)".format(-seconds)
+        self.log("Panel date/time: " + datetimestr + diff)
         return datetimestr
 
     def get_lcd_display(self):
