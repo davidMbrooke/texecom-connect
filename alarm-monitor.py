@@ -42,6 +42,7 @@ class TexecomConnect:
     CMD_GETLCDDISPLAY = chr(13)
     CMD_GETPANELIDENTIFICATION = chr(22)
     CMD_GETDATETIME = chr(23)
+    CMD_GETSYSTEMPOWER = chr(25)
     CMD_SETEVENTMESSAGES = chr(37)
     
     ZONETYPE_UNUSED = 0
@@ -444,6 +445,30 @@ class TexecomConnect:
                 format(zone, zonetype, areabitmap, zonetext))
         return (zonetype, areabitmap, zonetext)
 
+    def get_system_power(self):
+        details = self.sendcommand(self.CMD_GETSYSTEMPOWER, None)
+        if details == None:
+            return None
+        if len(details) != 5:
+            self.log("GETSYSTEMPOWER: response wrong length")
+            self.log("Payload: "+self.hexstr(details))
+            return None
+        ref_v = ord(details[0])
+        sys_v = ord(details[1])
+        bat_v = ord(details[2])
+        sys_i = ord(details[3])
+        bat_i = ord(details[4])
+
+        system_voltage = 13.7 + ((sys_v - ref_v) * 0.070)
+        battery_voltage = 13.7 + ((bat_v - ref_v) * 0.070)
+
+        system_current = sys_i * 9
+        battery_current = bat_i * 9
+
+        self.log("System power: system voltage {:f} battery voltage {:f} system current {:d} battery current {:d}".
+            format(system_voltage, battery_voltage, system_current, battery_current))
+        return (system_voltage, battery_voltage, system_current, battery_current)
+
     def get_all_zones(self):
         idstr = tc.get_panel_identification()
         panel_type,num_of_zones,something,firmware_version = idstr.split()
@@ -638,6 +663,7 @@ if __name__ == '__main__':
         print("Set event messages failed, exiting.")
         sys.exit(1)
     tc.get_date_time()
+    tc.get_system_power()
     tc.get_all_zones()
     print("Got all zones; waiting for events")
     tc.event_loop()
