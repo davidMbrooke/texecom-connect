@@ -365,6 +365,7 @@ class TexecomConnect:
             body = cmd
         self.sendcommandbody(body)
         retries = 3
+        response = None
         while retries > 0:
             retries -= 1
             try:
@@ -377,6 +378,9 @@ class TexecomConnect:
                 self.log("Timeout waiting for response, resending last command")
                 # NB: sequence number will be the same as last attempt
                 self.s.send(self.last_command)
+
+        if response == None:
+            return None
 
         commandid,payload = response[0],response[1:]
         if commandid != cmd:
