@@ -269,11 +269,18 @@ class TexecomConnect:
                 self.log("Panel has forcibly dropped connection, possibly due to inactivity")
                 self.s = None
                 return None
+            if len(header) < self.LENGTH_HEADER:
+                self.log("Header received from panel is too short, only {:d} bytes, ignoring - contents {}".format(len(header), self.hexstr(header)))
+                continue
             msg_start,msg_type,msg_length,msg_sequence = list(header)
-            payload = self.s.recv(ord(msg_length) - self.LENGTH_HEADER)
+            expected_len = ord(msg_length) - self.LENGTH_HEADER
+            payload = self.s.recv(expected_len)
             if self.print_network_traffic:
                 self.log("Received message payload:")
                 hexdump.hexdump(payload)
+            if len(payload) < expected_len:
+                self.log("Ignoring message, payload shorter than expected - got {:d} bytes, expected {:d} - contents {}".format(len(payload), expected_len, self.hexstr(payload)))
+                continue
             payload, msg_crc = payload[:-1], ord(payload[-1])
             expected_crc = self.crc8_func(header+payload)
             if msg_start != 't':
@@ -284,21 +291,21 @@ class TexecomConnect:
                 return None
             if msg_type == self.HEADER_TYPE_RESPONSE:
                 if msg_sequence != self.last_sequence:
-                    self.log("response seq: expected="+str(self.last_sequence)+" actual="+str(msg_sequence))
-                    # FIXME: send command again
-                    return None
+                    self.log("incorrect response seq: expected="+str(self.last_sequence)+" actual="+str(msg_sequence))
+                    # recv again - either we receive the correct reply in the next packet, or we'll time out and retry the command
+                    continue
             elif msg_type == self.HEADER_TYPE_MESSAGE:
                 if self.last_received_seq != -1:
                     next_msg_seq = self.last_received_seq + 1
                     if next_msg_seq == 256:
                         next_msg_seq = 0
+                    if msg_sequence == chr(self.last_received_seq):
+                        self.log("ignoring message, sequence number is the same as last message: expected="+str(next_msg_seq)+" actual="+str(msg_sequence))
+                        continue
                     if msg_sequence != chr(next_msg_seq):
-                        self.log("message seq: expected="+str(next_msg_seq)+" actual="+str(msg_sequence))
-                        # should maybe process anyway unless it looks like a dup?
-                        return None
+                        self.log("message seq incorrect - processing message anyway: expected="+str(next_msg_seq)+" actual="+str(msg_sequence))
+                        # process message anyway; perhaps we missed one or they arrived out of order
                 self.last_received_seq = ord(msg_sequence)
-            # FIXME: check we received the full expected length
-            # FIXME: if panel takes over 2 second to reply probably something is wrong and we need to resend the command with same sequence number
             if msg_type == self.HEADER_TYPE_COMMAND:
                 self.log("received command unexpectedly")
                 return None
