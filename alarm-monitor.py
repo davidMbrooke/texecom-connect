@@ -566,7 +566,10 @@ class TexecomConnect:
                 zone_str += ", auto bypassed"
             if zone_bitmap & (1 << 7):
                 zone_str += ", zone masked"
-            zone_text = self.zone[zone_number]['text']
+            if zone_number in self.zone:
+                zone_text = self.zone[zone_number]['text']
+            else:
+                zone_text = "unknown zone"
             return "Zone event message: zone {:d} '{}' {}".\
               format(zone_number, zone_text, zone_str)
         elif msg_type == tc.MSG_AREAEVENT:
