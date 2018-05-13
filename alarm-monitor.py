@@ -495,7 +495,6 @@ class TexecomConnect:
         panel_type,num_of_zones,something,firmware_version = idstr.split()
         num_of_zones = int(num_of_zones)
         for zone in range(1, num_of_zones + 1):
-            # FIXME: if an event arrives whilst we're waiting for a response, it seems the panel doesn't reply, so we need to timeout and send again
             zonetype, areabitmap, zonetext = tc.get_zone_details(zone)
             zonedata = {
               'type' : zonetype,
