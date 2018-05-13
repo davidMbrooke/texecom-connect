@@ -623,7 +623,7 @@ class TexecomConnect:
                 return "unknown log event message payload length"
 
             event_type = ord(payload[0])
-            group_type = ord(payload[1])
+            group_type_msg = ord(payload[1])
             timestamp_int = ord(timestamp[0]) + (ord(timestamp[1])<<8) + (ord(timestamp[2])<<16) + (ord(timestamp[3])<<24)
             seconds = timestamp_int & 63
             minutes = (timestamp_int >> 6) & 63
@@ -638,7 +638,21 @@ class TexecomConnect:
             else:
                 event_str = "Unknown log event type {:d}".format(event_type)
 
-            return "Log event message: {} {} group type: {:d}  parameter: {:d}   areas: {:d}  hex: {} ".format(timestamp_str, event_str, group_type, parameter, areas, tc.hexstr(payload))
+            group_type   = group_type_msg & 0b00111111
+            comm_delayed = group_type_msg & 0b01000000
+            communicated = group_type_msg & 0b10000000
+
+            if group_type in self.log_event_group_type:
+                group_type_str = self.log_event_group_type[group_type]
+            else:
+                group_type_str = "Unknown log event group type {:d}".format(group_type)
+
+            if comm_delayed:
+                group_type_str += " [comm delayed]"
+            if communicated:
+                group_type_str += " [communicated]"
+
+            return "Log event message: {} {}, {}  parameter: {:d}   areas: {:d}".format(timestamp_str, event_str, group_type_str, parameter, areas)
         else:
             return "unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload)
 
