@@ -328,6 +328,9 @@ class TexecomConnect:
 
     def login(self, udl):
         response = self.sendcommand(self.CMD_LOGIN, udl)
+        if response == None:
+            self.log("sendcommand returned None for login")
+            return False
         if response == self.CMD_RESPONSE_NAK:
             self.log("NAK response from panel")
             return False
