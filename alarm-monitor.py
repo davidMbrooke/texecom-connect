@@ -35,6 +35,9 @@ class User:
     def valid(self):
         return self.passcode != '' or self.tag != ''
 
+class Area:
+    pass
+
 class TexecomConnect:
     LENGTH_HEADER = 4
     HEADER_START = 't'
@@ -50,6 +53,7 @@ class TexecomConnect:
     CMD_GETDATETIME = chr(23)
     CMD_GETSYSTEMPOWER = chr(25)
     CMD_GETUSER = chr(27)
+    CMD_GETAREADETAILS = chr(35)
     CMD_SETEVENTMESSAGES = chr(37)
     
     ZONETYPE_UNUSED = 0
@@ -237,6 +241,7 @@ class TexecomConnect:
         self.last_received_seq = -1
         self.zone = {}
         self.user = {}
+        self.area = {}
 
     def hexstr(self,s):
         return " ".join("{:02x}".format(ord(c)) for c in s)
@@ -486,6 +491,31 @@ class TexecomConnect:
                 format(zone, zonetype, areabitmap, zonetext))
         return (zonetype, areabitmap, zonetext)
 
+    def get_area_details(self, areaNumber):
+        details = self.sendcommand(self.CMD_GETAREADETAILS, chr(areaNumber))
+        if details == None:
+            return None
+        area = Area()
+        if len(details) == 25:
+            # first byte is area number
+            areatext = details[1:17]
+            areatext = areatext.replace("\x00", " ")
+            areatext = re.sub(r'\W+', ' ', areatext)
+            areatext = areatext.strip()
+            area.name = areatext
+            area.exitDelay = ord(details[17]) + (ord(details[18])<<8)
+            area.entry1Delay = ord(details[19]) + (ord(details[20])<<8)
+            area.entry2Delay = ord(details[21]) + (ord(details[22])<<8)
+            area.secondEntry = ord(details[23]) + (ord(details[24])<<8)
+        else:
+            self.log("GETAREADETAILS: response wrong length")
+            self.log("Payload: "+self.hexstr(details))
+            return None
+
+        self.log("area {:d} text '{}' exitDelay {:d} entry1 {:d} entry2 {:d} secondEntry {:d}".
+          format(areaNumber, area.name, area.exitDelay, area.entry1Delay, area.entry1Delay, area.secondEntry))
+        return area
+
     def bcdDecode(self, bcd):
         result = ""
         for char in bcd:
@@ -576,6 +606,15 @@ class TexecomConnect:
         user.name = "Engineer"
         self.user[0] = user
 
+    def get_all_areas(self):
+        idstr = tc.get_panel_identification()
+        panel_type,num_of_zones,something,firmware_version = idstr.split()
+        num_of_zones = int(num_of_zones)
+        panel_areas = { 12 : 2, 24 : 2, 48 : 4, 88 : 8, 168 : 16, 640 : 64 }
+        for areanumber in range(1, panel_areas[num_of_zones]):
+            area = tc.get_area_details(areanumber)
+            self.area[areanumber] = area
+
     def event_loop(self):
         lastIdleCommand = 0
         while True:
@@ -648,7 +687,11 @@ class TexecomConnect:
             area_number = ord(payload[0])
             area_state = ord(payload[1])
             area_state_str = ["disarmed", "in exit", "in entry", "armed", "part armed", "in alarm"][area_state]
-            return "Area event message: area "+str(area_number)+" "+area_state_str
+            if area_number in self.area:
+                areaname = self.area[area_number].name
+            else:
+                areaname = "unknown"
+            return "Area event message: area {:d} {} {}".format(area_number, areaname, area_state_str)
         elif msg_type == tc.MSG_OUTPUTEVENT:
             locations = ["Panel outputs",
             "Digi outputs",
@@ -788,7 +831,8 @@ if __name__ == '__main__':
     tc.get_date_time()
     tc.get_system_power()
     tc.get_log_pointer()
+    tc.get_all_areas()
     tc.get_all_zones()
     tc.get_all_users()
-    print("Got all zones/users; waiting for events")
+    print("Got all areas/zones/users; waiting for events")
     tc.event_loop()
