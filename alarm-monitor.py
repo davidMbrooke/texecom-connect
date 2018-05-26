@@ -31,6 +31,10 @@ import crcmod
 import hexdump
 
 
+class User:
+    def valid(self):
+        return self.passcode != '' or self.tag != ''
+
 class TexecomConnect:
     LENGTH_HEADER = 4
     HEADER_START = 't'
@@ -45,6 +49,7 @@ class TexecomConnect:
     CMD_GETPANELIDENTIFICATION = chr(22)
     CMD_GETDATETIME = chr(23)
     CMD_GETSYSTEMPOWER = chr(25)
+    CMD_GETUSER = chr(27)
     CMD_SETEVENTMESSAGES = chr(37)
     
     ZONETYPE_UNUSED = 0
@@ -231,6 +236,7 @@ class TexecomConnect:
         self.last_command_time = 0
         self.last_received_seq = -1
         self.zone = {}
+        self.user = {}
 
     def hexstr(self,s):
         return " ".join("{:02x}".format(ord(c)) for c in s)
@@ -480,6 +486,46 @@ class TexecomConnect:
                 format(zone, zonetype, areabitmap, zonetext))
         return (zonetype, areabitmap, zonetext)
 
+    def bcdDecode(self, bcd):
+        result = ""
+        for char in bcd:
+            for val in (ord(char) >> 4, ord(char) & 0xF):
+                if val <= 9:
+                    result += str(val)
+        return result
+
+    def get_user(self, usernumber):
+        # panel may support more than 255 users, in which case this needs 2 bytes
+        # body = chr(usernumber & 0xff)+chr(usernumber >> 8)
+        body = chr(usernumber)
+        details = self.sendcommand(self.CMD_GETUSER, body)
+        if details == None:
+            return None
+        user = User()
+        if len(details) == 23:
+            username = details[0:8]
+            username = username.replace("\x00", " ")
+            username = re.sub(r'\W+', ' ', username)
+            username = username.strip()
+            user.name = username
+            user.passcode = self.bcdDecode(details[8:11])
+            user.areas = ord(details[11])
+            user.modifiers = details[12]
+            user.locks = details[13]
+            user.doors =details[14:17]
+            user.tag = self.bcdDecode(details[17:21]) # last byte always 0xff
+            user.config = ord(details[21]) + (ord(details[22])<<8)
+        else:
+            # there are other lengths but I have no way to test
+            self.log("GETUSER: unexpected response length {:d}".format(len(details)))
+            self.log("Payload: "+self.hexstr(details))
+            return None
+
+        if user.valid():
+            self.log("user {:d} text '{}' areas '{:d}' passcode '{}' tag '{}'".
+                format(usernumber, user.name, user.areas, user.passcode, user.tag))
+        return user
+
     def get_system_power(self):
         details = self.sendcommand(self.CMD_GETSYSTEMPOWER, None)
         if details == None:
@@ -516,6 +562,19 @@ class TexecomConnect:
               'text' : zonetext
             }
             self.zone[zone] = zonedata
+
+    def get_all_users(self):
+        idstr = tc.get_panel_identification()
+        panel_type,num_of_zones,something,firmware_version = idstr.split()
+        num_of_zones = int(num_of_zones)
+        panel_users = { 12 : 8, 24 : 25, 48 : 50, 88 : 100, 168 : 200, 640 : 1000 }
+        for usernumber in range(1, panel_users[num_of_zones]):
+            user = tc.get_user(usernumber)
+            if user.valid():
+                self.user[usernumber] = user
+        user = User()
+        user.name = "Engineer"
+        self.user[0] = user
 
     def event_loop(self):
         lastIdleCommand = 0
@@ -617,8 +676,12 @@ class TexecomConnect:
             user_number = ord(payload[0])
             user_state = ord(payload[1])
             user_state_str = ["code", "tag", "code+tag"][user_state]
-            return "User event message: logon by user {:d} {}".\
-              format(user_number, user_state_str)
+            if user_number in self.user:
+                name = self.user[user_number].name
+            else:
+                name = "unknown"
+            return "User event message: logon by user '{}' {:d} {}".\
+              format(name, user_number, user_state_str)
         elif msg_type == tc.MSG_LOGEVENT:
             if len(payload) == 8:
                 parameter = ord(payload[2])
@@ -726,5 +789,6 @@ if __name__ == '__main__':
     tc.get_system_power()
     tc.get_log_pointer()
     tc.get_all_zones()
-    print("Got all zones; waiting for events")
+    tc.get_all_users()
+    print("Got all zones/users; waiting for events")
     tc.event_loop()
