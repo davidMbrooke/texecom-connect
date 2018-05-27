@@ -246,6 +246,8 @@ class TexecomConnect:
         self.zone = {}
         self.user = {}
         self.area = {}
+        # used to record which of our idle commands we last sent to the panel
+        self.lastIdleCommand = 0
 
     def hexstr(self, s):
         """Convert a binary string into a hex representation suitable for logging payloads etc"""
@@ -282,6 +284,25 @@ class TexecomConnect:
         """Receive a response to a command. Automatically handles any
         messages that arrive first"""
         while True:
+            assert self.last_command_time > 0
+            time_since_last_command = time.time() - self.last_command_time
+            if time_since_last_command > 30:
+                # send any message to reset the panel's 60 second timeout
+                # this ends up recursively calling recvresponse; however as our retry * timeout (3 * 2 == 6) is
+                # far less than the 30 seconds between idle commands that won't be an issue
+                if self.lastIdleCommand == 0:
+                    result = tc.get_date_time()
+                elif self.lastIdleCommand == 1:
+                    result = tc.get_log_pointer()
+                else:
+                    result = tc.get_system_power()
+                self.lastIdleCommand += 1
+                if self.lastIdleCommand == 3:
+                    self.lastIdleCommand = 0
+                if result == None:
+                    self.log("idle command failed; closing socket")
+                    self.closesocket()
+                    return None
             header = self.s.recv(self.LENGTH_HEADER)
             if self.print_network_traffic:
                 self.log("Received message header:")
@@ -673,7 +694,6 @@ class TexecomConnect:
             tc.get_all_zones()
             tc.get_all_users()
             self.log("Got all areas/zones/users; waiting for events")
-            lastIdleCommand = 0
             while self.s != None:
                 try:
                     global garage_pir_activated_at
@@ -686,25 +706,8 @@ class TexecomConnect:
                     payload = tc.recvresponse()
 
                 except socket.timeout:
-                    # FIXME: this should be in recvresponse, otherwise we
-                    # won't send if we get a continual stream of events from the
-                    # panels
-                    assert self.last_command_time > 0
-                    time_since_last_command = time.time() - self.last_command_time
-                    if time_since_last_command > 30:
-                        # send any message to reset the panel's 60 second timeout
-                        if lastIdleCommand == 0:
-                            result = tc.get_date_time()
-                        elif lastIdleCommand == 1:
-                            result = tc.get_log_pointer()
-                        else:
-                            result = tc.get_system_power()
-                        lastIdleCommand += 1
-                        if lastIdleCommand == 3:
-                            lastIdleCommand = 0
-                        if result == None:
-                            self.log("idle command failed; closing socket")
-                            self.closesocket()
+                    # we didn't send any command, so a timeout is the expected result, continue our loop
+                    continue
 
     def decode_message_to_text(self, payload):
         msg_type,payload = payload[0],payload[1:]
