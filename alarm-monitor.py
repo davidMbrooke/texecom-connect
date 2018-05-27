@@ -38,6 +38,9 @@ class User:
 class Area:
     pass
 
+class Zone:
+    pass
+
 class TexecomConnect:
     LENGTH_HEADER = 4
     HEADER_START = 't'
@@ -460,36 +463,37 @@ class TexecomConnect:
         self.log("Panel identification: "+panelid)
         return panelid
 
-    def get_zone_details(self, zone):
-        details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zone))
+    def get_zone_details(self, zoneNumber):
+        # zone is two bytes on 680
+        details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zoneNumber))
         if details == None:
             return None
+        zone = Zone()
         if len(details) == 34:
-            zonetype = ord(details[0])
-            areabitmap = ord(details[1])
-            zonetext = details[2:]
+            zone.zoneType = ord(details[0])
+            zone.areaBitmap = ord(details[1])
+            zone.text = details[2:]
         elif len(details) == 35:
-            zonetype, areabitmap, zonetext = ord(details[0]), ord(details[1]) + (ord(details[2])<<8), details[3:]
-            zonetype = ord(details[0])
-            areabitmap = ord(details[1]) + (ord(details[2])<<8)
-            zonetext = details[3:]
+            zone.zoneType = ord(details[0])
+            zone.areaBitmap = ord(details[1]) + (ord(details[2])<<8)
+            zone.text = details[3:]
         elif len(details) == 41:
-            zonetype = ord(details[0])
-            areabitmap = ord(details[1]) + (ord(details[2])<<8) + (ord(details[3])<<16) + (ord(details[4])<<24) + \
+            zone.zoneType = ord(details[0])
+            zone.areaBitmap = ord(details[1]) + (ord(details[2])<<8) + (ord(details[3])<<16) + (ord(details[4])<<24) + \
               (ord(details[5])<<32) + (ord(details[6])<<40) + (ord(details[7])<<48) + (ord(details[8])<<56)
-            zonetext = details[9:]
+            zone.text = details[9:]
         else:
             self.log("GETZONEDETAILS: response wrong length")
             self.log("Payload: "+self.hexstr(details))
             return None
 
-        zonetext = zonetext.replace("\x00", " ")
-        zonetext = re.sub(r'\W+', ' ', zonetext)
-        zonetext = zonetext.strip()
-        if zonetype != self.ZONETYPE_UNUSED:
+        zone.text = zone.text.replace("\x00", " ")
+        zone.text = re.sub(r'\W+', ' ', zone.text)
+        zone.text = zone.text.strip()
+        if zone.zoneType != self.ZONETYPE_UNUSED:
             self.log("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
-                format(zone, zonetype, areabitmap, zonetext))
-        return (zonetype, areabitmap, zonetext)
+                format(zoneNumber, zone.zoneType, zone.areaBitmap, zone.text))
+        return zone
 
     def get_area_details(self, areaNumber):
         details = self.sendcommand(self.CMD_GETAREADETAILS, chr(areaNumber))
@@ -584,14 +588,9 @@ class TexecomConnect:
         idstr = tc.get_panel_identification()
         panel_type,num_of_zones,something,firmware_version = idstr.split()
         num_of_zones = int(num_of_zones)
-        for zone in range(1, num_of_zones + 1):
-            zonetype, areabitmap, zonetext = tc.get_zone_details(zone)
-            zonedata = {
-              'type' : zonetype,
-              'areas' : areabitmap,
-              'text' : zonetext
-            }
-            self.zone[zone] = zonedata
+        for zoneNumber in range(1, num_of_zones + 1):
+            zone = tc.get_zone_details(zoneNumber)
+            self.zone[zoneNumber] = zone
 
     def get_all_users(self):
         idstr = tc.get_panel_identification()
@@ -678,7 +677,7 @@ class TexecomConnect:
             if zone_bitmap & (1 << 7):
                 zone_str += ", zone masked"
             if zone_number in self.zone:
-                zone_text = self.zone[zone_number]['text']
+                zone_text = self.zone[zone_number].text
             else:
                 zone_text = "unknown zone"
             return "Zone event message: zone {:d} '{}' {}".\
