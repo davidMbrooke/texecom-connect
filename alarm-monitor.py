@@ -59,6 +59,14 @@ class TexecomConnect:
     CMD_GETAREADETAILS = chr(35)
     CMD_SETEVENTMESSAGES = chr(37)
     
+    # 2-3 seconds is mentioned in section 5.5 of protocol specification
+    # Increasing this value is not recommended as it will mean if the
+    # panel fails to respond to a command (as it sometimes does it it
+    # sends an event at the same time we send a command) it will take
+    # longer for us to realise and resend the command
+    CMD_TIMEOUT = 2
+    CMD_RETRIES = 3
+
     ZONETYPE_UNUSED = 0
 
     CMD_RESPONSE_ACK = '\x06'
@@ -255,12 +263,7 @@ class TexecomConnect:
 
     def connect(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # 2-3 seconds is mentioned in section 5.5 of protocol specification
-        # Increasing this value is not recommended as it will mean if the
-        # panel fails to respond to a command (as it sometimes does it it
-        # sends an event at the same time we send a command) it will take
-        # longer for us to realise and resend the command
-        self.s.settimeout(2)
+        self.s.settimeout(self.CMD_TIMEOUT)
         self.s.connect((self.host, self.port))
         # if we send the login message to fast the panel ignores it; texecom
         # recommend 500ms, see:
@@ -283,7 +286,11 @@ class TexecomConnect:
     def recvresponse(self):
         """Receive a response to a command. Automatically handles any
         messages that arrive first"""
+        startTime = time.time()
         while True:
+            if time.time() - startTime > self.CMD_TIMEOUT:
+                # if we have had multiple event messages, we may get to the timeout time without the recv timing out
+                raise socket.timeout
             assert self.last_command_time > 0
             time_since_last_command = time.time() - self.last_command_time
             if time_since_last_command > 30:
@@ -375,7 +382,6 @@ class TexecomConnect:
             self.log("Sending command:")
             hexdump.hexdump(data)
         self.s.send(data)
-        self.last_command_time = time.time()
         self.last_command = data
 
     def login(self):
@@ -419,7 +425,8 @@ class TexecomConnect:
         else:
             body = cmd
         self.sendcommandbody(body)
-        retries = 3
+        self.last_command_time = time.time()
+        retries = self.CMD_RETRIES
         response = None
         while retries > 0:
             retries -= 1
@@ -427,13 +434,12 @@ class TexecomConnect:
                 response=self.recvresponse()
                 break
             except socket.timeout:
-                # FIXME: this maybe isn't quite right as if we get multiple
-                # events from the panel that will delay us resending until
-                # we don't get any events for 2 second
                 self.log("Timeout waiting for response, resending last command")
                 # NB: sequence number will be the same as last attempt
+                self.last_command_time = time.time()
                 self.s.send(self.last_command)
 
+        self.last_command = None
         if response == None:
             return None
 
