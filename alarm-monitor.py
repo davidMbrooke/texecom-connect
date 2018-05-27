@@ -667,8 +667,8 @@ class TexecomConnect:
                 notifiedConnectionLoss = False
                 self.log("Connection lost")
             connectionLostTime = time.time() - lastConnectedAt
-            if connectionLostTime >= 30 and not notifiedConnectionLoss:
-                self.log("Connection lost for over 30 seconds - calling send-message.sh")
+            if connectionLostTime >= 60 and not notifiedConnectionLoss:
+                self.log("Connection lost for over 60 seconds - calling send-message.sh")
                 os.system("./send-message.sh 'connection lost'")
                 notifiedConnectionLoss = True
             try:
