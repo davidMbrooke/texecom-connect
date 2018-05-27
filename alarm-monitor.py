@@ -298,11 +298,11 @@ class TexecomConnect:
                 # this ends up recursively calling recvresponse; however as our retry * timeout (3 * 2 == 6) is
                 # far less than the 30 seconds between idle commands that won't be an issue
                 if self.lastIdleCommand == 0:
-                    result = tc.get_date_time()
+                    result = self.get_date_time()
                 elif self.lastIdleCommand == 1:
-                    result = tc.get_log_pointer()
+                    result = self.get_log_pointer()
                 else:
-                    result = tc.get_system_power()
+                    result = self.get_system_power()
                 self.lastIdleCommand += 1
                 if self.lastIdleCommand == 3:
                     self.lastIdleCommand = 0
@@ -497,7 +497,7 @@ class TexecomConnect:
         return logpointer
 
     def get_number_zones(self):
-        idstr = tc.get_panel_identification()
+        idstr = self.get_panel_identification()
         if idstr == None:
             return None
         self.panelType,numberOfZones,something,self.firmwareVersion = idstr.split()
@@ -637,13 +637,13 @@ class TexecomConnect:
 
     def get_all_zones(self):
         for zoneNumber in range(1, self.numberOfZones + 1):
-            zone = tc.get_zone_details(zoneNumber)
+            zone = self.get_zone_details(zoneNumber)
             self.zone[zoneNumber] = zone
 
     def get_all_users(self):
         panel_users = { 12 : 8, 24 : 25, 48 : 50, 88 : 100, 168 : 200, 640 : 1000 }
         for usernumber in range(1, panel_users[self.numberOfZones]):
-            user = tc.get_user(usernumber)
+            user = self.get_user(usernumber)
             if user.valid():
                 self.user[usernumber] = user
         user = User()
@@ -653,7 +653,7 @@ class TexecomConnect:
     def get_all_areas(self):
         panel_areas = { 12 : 2, 24 : 2, 48 : 4, 88 : 8, 168 : 16, 640 : 64 }
         for areanumber in range(1, panel_areas[self.numberOfZones]):
-            area = tc.get_area_details(areanumber)
+            area = self.get_area_details(areanumber)
             self.area[areanumber] = area
 
     def event_loop(self):
@@ -672,18 +672,18 @@ class TexecomConnect:
                 os.system("./send-message.sh 'connection lost'")
                 notifiedConnectionLoss = True
             try:
-                tc.connect()
+                self.connect()
             except socket.error, e:
                 self.log("Connect failed - {}; sleeping for 5 seconds".format(e))
                 time.sleep(5)
                 continue
-            if not tc.login():
+            if not self.login():
                 self.log("Login failed - udl password incorrect, pre-v4 panel, or trying to connect too soon: closing socket, try again 5 in seconds")
                 time.sleep(5)
                 self.closesocket()
                 continue
             self.log("login successful")
-            if not tc.set_event_messages():
+            if not self.set_event_messages():
                 self.log("Set event messages failed, closing socket")
                 self.closesocket()
                 continue
@@ -691,13 +691,13 @@ class TexecomConnect:
             if notifiedConnectionLoss:
                 self.log("Connection regained - calling send-message.sh")
                 os.system("./send-message.sh 'connection regained'")
-            tc.get_number_zones()
-            tc.get_date_time()
-            tc.get_system_power()
-            tc.get_log_pointer()
-            tc.get_all_areas()
-            tc.get_all_zones()
-            tc.get_all_users()
+            self.get_number_zones()
+            self.get_date_time()
+            self.get_system_power()
+            self.get_log_pointer()
+            self.get_all_areas()
+            self.get_all_zones()
+            self.get_all_users()
             self.log("Got all areas/zones/users; waiting for events")
             while self.s != None:
                 try:
@@ -708,7 +708,7 @@ class TexecomConnect:
                         if active_for > 4*60:
                             garage_pir_activated_at=time.time()
                             os.system("./garage-pir.sh 'still active'")
-                    payload = tc.recvresponse()
+                    payload = self.recvresponse()
 
                 except socket.timeout:
                     # we didn't send any command, so a timeout is the expected result, continue our loop
@@ -716,9 +716,9 @@ class TexecomConnect:
 
     def decode_message_to_text(self, payload):
         msg_type,payload = payload[0],payload[1:]
-        if msg_type == tc.MSG_DEBUG:
-            return "Debug message: "+tc.hexstr(payload)
-        elif msg_type == tc.MSG_ZONEEVENT:
+        if msg_type == self.MSG_DEBUG:
+            return "Debug message: "+self.hexstr(payload)
+        elif msg_type == self.MSG_ZONEEVENT:
             if len(payload) == 2:
                 zone_number = ord(payload[0])
                 zone_bitmap = ord(payload[1])
@@ -747,7 +747,7 @@ class TexecomConnect:
                 zone_text = "unknown zone"
             return "Zone event message: zone {:d} '{}' {}".\
               format(zone_number, zone_text, zone_str)
-        elif msg_type == tc.MSG_AREAEVENT:
+        elif msg_type == self.MSG_AREAEVENT:
             area_number = ord(payload[0])
             area_state = ord(payload[1])
             area_state_str = ["disarmed", "in exit", "in entry", "armed", "part armed", "in alarm"][area_state]
@@ -756,7 +756,7 @@ class TexecomConnect:
             else:
                 areaname = "unknown"
             return "Area event message: area {:d} {} {}".format(area_number, areaname, area_state_str)
-        elif msg_type == tc.MSG_OUTPUTEVENT:
+        elif msg_type == self.MSG_OUTPUTEVENT:
             locations = ["Panel outputs",
             "Digi outputs",
             "Digi Channel low 8",
@@ -779,7 +779,7 @@ class TexecomConnect:
                   format(output_location >> 4, output_location & 0xf)
             return "Output event message: location {:d}['{}'] now 0x{:02x}".\
               format(output_location, output_name, output_state)
-        elif msg_type == tc.MSG_USEREVENT:
+        elif msg_type == self.MSG_USEREVENT:
             user_number = ord(payload[0])
             user_state = ord(payload[1])
             user_state_str = ["code", "tag", "code+tag"][user_state]
@@ -789,7 +789,7 @@ class TexecomConnect:
                 name = "unknown"
             return "User event message: logon by user '{}' {:d} {}".\
               format(name, user_number, user_state_str)
-        elif msg_type == tc.MSG_LOGEVENT:
+        elif msg_type == self.MSG_LOGEVENT:
             if len(payload) == 8:
                 parameter = ord(payload[2])
                 areas = ord(payload[3])
@@ -840,7 +840,7 @@ class TexecomConnect:
 
             return "Log event message: {} {}, {}  parameter: {:d}   areas: {:d}".format(timestamp_str, event_str, group_type_str, parameter, areas)
         else:
-            return "unknown message type "+str(ord(msg_type))+": "+tc.hexstr(payload)
+            return "unknown message type "+str(ord(msg_type))+": "+self.hexstr(payload)
 
 def message_handler(payload):
     tc.log(tc.decode_message_to_text(payload))
