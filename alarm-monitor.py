@@ -496,6 +496,13 @@ class TexecomConnect:
         self.log("Log pointer: {:d}".format(logpointer))
         return logpointer
 
+    def get_number_zones(self):
+        idstr = tc.get_panel_identification()
+        if idstr == None:
+            return None
+        self.panelType,numberOfZones,something,self.firmwareVersion = idstr.split()
+        self.numberOfZones = int(numberOfZones)
+
     def get_panel_identification(self):
         panelid = self.sendcommand(self.CMD_GETPANELIDENTIFICATION, None)
         if panelid == None:
@@ -629,19 +636,13 @@ class TexecomConnect:
         return (system_voltage, battery_voltage, system_current, battery_current)
 
     def get_all_zones(self):
-        idstr = tc.get_panel_identification()
-        panel_type,num_of_zones,something,firmware_version = idstr.split()
-        num_of_zones = int(num_of_zones)
-        for zoneNumber in range(1, num_of_zones + 1):
+        for zoneNumber in range(1, self.numberOfZones + 1):
             zone = tc.get_zone_details(zoneNumber)
             self.zone[zoneNumber] = zone
 
     def get_all_users(self):
-        idstr = tc.get_panel_identification()
-        panel_type,num_of_zones,something,firmware_version = idstr.split()
-        num_of_zones = int(num_of_zones)
         panel_users = { 12 : 8, 24 : 25, 48 : 50, 88 : 100, 168 : 200, 640 : 1000 }
-        for usernumber in range(1, panel_users[num_of_zones]):
+        for usernumber in range(1, panel_users[self.numberOfZones]):
             user = tc.get_user(usernumber)
             if user.valid():
                 self.user[usernumber] = user
@@ -650,11 +651,8 @@ class TexecomConnect:
         self.user[0] = user
 
     def get_all_areas(self):
-        idstr = tc.get_panel_identification()
-        panel_type,num_of_zones,something,firmware_version = idstr.split()
-        num_of_zones = int(num_of_zones)
         panel_areas = { 12 : 2, 24 : 2, 48 : 4, 88 : 8, 168 : 16, 640 : 64 }
-        for areanumber in range(1, panel_areas[num_of_zones]):
+        for areanumber in range(1, panel_areas[self.numberOfZones]):
             area = tc.get_area_details(areanumber)
             self.area[areanumber] = area
 
@@ -693,6 +691,7 @@ class TexecomConnect:
             if notifiedConnectionLoss:
                 self.log("Connection regained - calling send-message.sh")
                 os.system("./send-message.sh 'connection regained'")
+            tc.get_number_zones()
             tc.get_date_time()
             tc.get_system_power()
             tc.get_log_pointer()
