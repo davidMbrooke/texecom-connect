@@ -645,7 +645,7 @@ class TexecomConnect:
                     if lastIdleCommand == 3:
                         lastIdleCommand = 0
                     if result == None:
-                        self.log("'get date time' failed; exiting")
+                        self.log("idle command failed; exiting")
                         # TODO could just reconnect
                         sys.exit(1)
 
