@@ -233,9 +233,10 @@ class TexecomConnect:
     log_event_group_type[34]="PA Timer Reset"
     log_event_group_type[35]="PA Zone Lockout"
     
-    def __init__(self, host, port , message_handler_func):
+    def __init__(self, host, port, udlPassword, message_handler_func):
         self.host = host
         self.port = port
+        self.udlpassword = udlpassword
         self.crc8_func = crcmod.mkCrcFun(poly=0x185, rev=False, initCrc=0xff)
         self.nextseq = 0
         self.message_handler_func = message_handler_func
@@ -246,7 +247,8 @@ class TexecomConnect:
         self.user = {}
         self.area = {}
 
-    def hexstr(self,s):
+    def hexstr(self, s):
+        """Convert a binary string into a hex representation suitable for logging payloads etc"""
         return " ".join("{:02x}".format(ord(c)) for c in s)
 
     def connect(self):
@@ -270,6 +272,11 @@ class TexecomConnect:
         self.nextseq += 1
         return next
 
+    def closesocket(self):
+        if self.s != None:
+            self.s.shutdown(socket.SHUT_RDWR)
+            self.s.close()
+            self.s = None
     
     def recvresponse(self):
         """Receive a response to a command. Automatically handles any
@@ -281,12 +288,21 @@ class TexecomConnect:
                 hexdump.hexdump(header)
             if header == "+++":
                 self.log("Panel has forcibly dropped connection, possibly due to inactivity")
-                self.s = None
+                self.closesocket()
+                return None
+            if header == "+++A":
+                self.log("Panel is trying to hangup modem; probably connected too soon")
+                self.closesocket()
                 return None
             if len(header) < self.LENGTH_HEADER:
                 self.log("Header received from panel is too short, only {:d} bytes, ignoring - contents {}".format(len(header), self.hexstr(header)))
+                hexdump.hexdump(header)
                 continue
             msg_start,msg_type,msg_length,msg_sequence = list(header)
+            if msg_start != 't':
+                self.log("unexpected msg start: "+hex(ord(msg_start)))
+                hexdump.hexdump(header)
+                return None
             expected_len = ord(msg_length) - self.LENGTH_HEADER
             payload = self.s.recv(expected_len)
             if self.print_network_traffic:
@@ -294,12 +310,13 @@ class TexecomConnect:
                 hexdump.hexdump(payload)
             if len(payload) < expected_len:
                 self.log("Ignoring message, payload shorter than expected - got {:d} bytes, expected {:d} - contents {}".format(len(payload), expected_len, self.hexstr(payload)))
+                print("header:")
+                hexdump.hexdump(header)
+                print("payload:")
+                hexdump.hexdump(payload)
                 continue
             payload, msg_crc = payload[:-1], ord(payload[-1])
             expected_crc = self.crc8_func(header+payload)
-            if msg_start != 't':
-                self.log("unexpected msg start: "+hex(ord(msg_start)))
-                return None
             if msg_crc != expected_crc:
                 self.log("crc: expected="+str(expected_crc)+" actual="+str(msg_crc))
                 return None
@@ -340,8 +357,8 @@ class TexecomConnect:
         self.last_command_time = time.time()
         self.last_command = data
 
-    def login(self, udl):
-        response = self.sendcommand(self.CMD_LOGIN, udl)
+    def login(self):
+        response = self.sendcommand(self.CMD_LOGIN, self.udlpassword)
         if response == None:
             self.log("sendcommand returned None for login")
             return False
@@ -615,39 +632,79 @@ class TexecomConnect:
             self.area[areanumber] = area
 
     def event_loop(self):
-        lastIdleCommand = 0
+        lastConnectedAt = time.time()
+        notifiedConnectionLoss = False
+        connected = False
         while True:
+            if connected:
+                lastConnectedAt = time.time()
+                connected = False
+                notifiedConnectionLoss = False
+                self.log("Connection lost")
+            connectionLostTime = time.time() - lastConnectedAt
+            if connectionLostTime >= 30 and not notifiedConnectionLoss:
+                self.log("Connection lost for over 30 seconds - calling send-message.sh")
+                os.system("./send-message.sh 'connection lost'")
+                notifiedConnectionLoss = True
             try:
-                global garage_pir_activated_at
-                if garage_pir_activated_at > 0:
-                    active_for = time.time() - garage_pir_activated_at
-                    self.log("Garage PIR active for {:.1f} minutes".format(active_for/60))
-                    if active_for > 4*60:
-                        garage_pir_activated_at=time.time()
-                        os.system("./garage-pir.sh 'still active'")
-                payload = tc.recvresponse()
-        
-            except socket.timeout:
-                # FIXME: this should be in recvresponse, otherwise we
-                # won't send if we get a continual stream of events from the
-                # panels
-                assert self.last_command_time > 0
-                time_since_last_command = time.time() - self.last_command_time
-                if time_since_last_command > 30:
-                    # send any message to reset the panel's 60 second timeout
-                    if lastIdleCommand == 0:
-                        result = tc.get_date_time()
-                    elif lastIdleCommand == 1:
-                        result = tc.get_log_pointer()
-                    else:
-                        result = tc.get_system_power()
-                    lastIdleCommand += 1
-                    if lastIdleCommand == 3:
-                        lastIdleCommand = 0
-                    if result == None:
-                        self.log("idle command failed; exiting")
-                        # TODO could just reconnect
-                        sys.exit(1)
+                tc.connect()
+            except socket.error, e:
+                self.log("Connect failed - {}; sleeping for 5 seconds".format(e))
+                time.sleep(5)
+                continue
+            if not tc.login():
+                self.log("Login failed - udl password incorrect, pre-v4 panel, or trying to connect too soon: closing socket, try again 5 in seconds")
+                time.sleep(5)
+                self.closesocket()
+                continue
+            self.log("login successful")
+            if not tc.set_event_messages():
+                self.log("Set event messages failed, closing socket")
+                self.closesocket()
+                continue
+            connected = True
+            if notifiedConnectionLoss:
+                self.log("Connection regained - calling send-message.sh")
+                os.system("./send-message.sh 'connection regained'")
+            tc.get_date_time()
+            tc.get_system_power()
+            tc.get_log_pointer()
+            tc.get_all_areas()
+            tc.get_all_zones()
+            tc.get_all_users()
+            self.log("Got all areas/zones/users; waiting for events")
+            lastIdleCommand = 0
+            while self.s != None:
+                try:
+                    global garage_pir_activated_at
+                    if garage_pir_activated_at > 0:
+                        active_for = time.time() - garage_pir_activated_at
+                        self.log("Garage PIR active for {:.1f} minutes".format(active_for/60))
+                        if active_for > 4*60:
+                            garage_pir_activated_at=time.time()
+                            os.system("./garage-pir.sh 'still active'")
+                    payload = tc.recvresponse()
+
+                except socket.timeout:
+                    # FIXME: this should be in recvresponse, otherwise we
+                    # won't send if we get a continual stream of events from the
+                    # panels
+                    assert self.last_command_time > 0
+                    time_since_last_command = time.time() - self.last_command_time
+                    if time_since_last_command > 30:
+                        # send any message to reset the panel's 60 second timeout
+                        if lastIdleCommand == 0:
+                            result = tc.get_date_time()
+                        elif lastIdleCommand == 1:
+                            result = tc.get_log_pointer()
+                        else:
+                            result = tc.get_system_power()
+                        lastIdleCommand += 1
+                        if lastIdleCommand == 3:
+                            lastIdleCommand = 0
+                        if result == None:
+                            self.log("idle command failed; closing socket")
+                            self.closesocket()
 
     def decode_message_to_text(self, payload):
         msg_type,payload = payload[0],payload[1:]
@@ -818,20 +875,5 @@ if __name__ == '__main__':
 
 
     sys.stdout = Unbuffered(sys.stdout)
-    tc = TexecomConnect(texhost, port, message_handler)
-    tc.connect()
-    if not tc.login(udlpassword):
-        print("Login failed - udl password incorrect or pre-v4 panel, exiting.")
-        sys.exit(1)
-    print("login successful")
-    if not tc.set_event_messages():
-        print("Set event messages failed, exiting.")
-        sys.exit(1)
-    tc.get_date_time()
-    tc.get_system_power()
-    tc.get_log_pointer()
-    tc.get_all_areas()
-    tc.get_all_zones()
-    tc.get_all_users()
-    print("Got all areas/zones/users; waiting for events")
+    tc = TexecomConnect(texhost, port, udlpassword, message_handler)
     tc.event_loop()
