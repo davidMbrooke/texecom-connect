@@ -256,6 +256,8 @@ class TexecomConnect:
         self.area = {}
         # used to record which of our idle commands we last sent to the panel
         self.lastIdleCommand = 0
+        # Set to true if the idle loop should reread the site data
+        self.siteDataChanged = False
 
     def hexstr(self, s):
         """Convert a binary string into a hex representation suitable for logging payloads etc"""
@@ -371,6 +373,8 @@ class TexecomConnect:
             elif msg_type == self.HEADER_TYPE_RESPONSE:
                 return payload
             elif msg_type == self.HEADER_TYPE_MESSAGE:
+                # FIXME: for "Site Data Changed" we should re-read the zone names etc - need to decode message
+                # self.siteDataChanged = True
                 self.message_handler_func(payload)
     
     def sendcommandbody(self, body):
@@ -656,6 +660,11 @@ class TexecomConnect:
             area = self.get_area_details(areanumber)
             self.area[areanumber] = area
 
+    def get_site_data(self):
+        self.get_all_areas()
+        self.get_all_zones()
+        self.get_all_users()
+
     def event_loop(self):
         lastConnectedAt = time.time()
         notifiedConnectionLoss = False
@@ -695,9 +704,7 @@ class TexecomConnect:
             self.get_date_time()
             self.get_system_power()
             self.get_log_pointer()
-            self.get_all_areas()
-            self.get_all_zones()
-            self.get_all_users()
+            self.get_site_data()
             self.log("Got all areas/zones/users; waiting for events")
             while self.s != None:
                 try:
@@ -708,6 +715,9 @@ class TexecomConnect:
                         if active_for > 4*60:
                             garage_pir_activated_at=time.time()
                             os.system("./garage-pir.sh 'still active'")
+                    if self.siteDataChanged:
+                        self.siteDataChanged = False
+                        self.get_site_data()
                     payload = self.recvresponse()
 
                 except socket.timeout:
