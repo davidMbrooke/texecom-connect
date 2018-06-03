@@ -720,12 +720,11 @@ class TexecomConnect:
             self.log("Got all areas/zones/users; waiting for events")
             while self.s is not None:
                 try:
-                    global garage_pir_activated_at
-                    if garage_pir_activated_at > 0:
-                        active_for = time.time() - garage_pir_activated_at
+                    garage_pir = self.zone[73]
+                    if garage_pir.active_since > 0:
+                        active_for = time.time() - garage_pir.active_since
                         self.log("Garage PIR active for {:.1f} minutes".format(active_for / 60))
                         if active_for > 4 * 60:
-                            garage_pir_activated_at = time.time()
                             os.system("./garage-pir.sh 'still active'")
                     if self.siteDataChanged:
                         self.siteDataChanged = False
@@ -875,16 +874,18 @@ def message_handler(payload):
     if msg_type == tc.MSG_ZONEEVENT:
         zone_number = ord(payload[0])
         zone_bitmap = ord(payload[1])
-        zone_state = zone_bitmap & 0x3
+        zone = tc.zone[zone_number]
+        zone.state = zone_bitmap & 0x3
+        if zone_state == 1:
+            zone.active_since = time.time()
+        else:
+            zone.active_since = None
         if zone_number == 73:
-            global garage_pir_activated_at
             if zone_state == 1:
                 tc.log("Garage PIR activated; running script")
-                garage_pir_activated_at = time.time()
                 os.system("./garage-pir.sh 'activated'")
             else:
                 tc.log("Garage PIR cleared")
-                garage_pir_activated_at = 0
 
 
 # disable buffering to stdout when it's redirected to a file/pipe
@@ -905,8 +906,6 @@ class Unbuffered(object):
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
-
-garage_pir_activated_at = 0
 
 if __name__ == '__main__':
     texhost = '192.168.1.9'
