@@ -49,7 +49,7 @@ class Zone:
     pass
 
 
-class TexecomConnect:
+class TexecomConnect(object):
     LENGTH_HEADER = 4
     HEADER_START = 't'
     HEADER_TYPE_COMMAND = 'C'
