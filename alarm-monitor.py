@@ -31,13 +31,18 @@ import crcmod
 import hexdump
 
 
-class User:
+class User(object):
+    def __init__(self):
+        self.passcode = None
+        self.tag = None
+
     def valid(self):
         return self.passcode != '' or self.tag != ''
 
 
-class Area:
-    pass
+class Area(object):
+    def __init__(self):
+        pass
 
 
 class Zone:
@@ -244,25 +249,32 @@ class TexecomConnect:
     log_event_group_type[34] = "PA Timer Reset"
     log_event_group_type[35] = "PA Zone Lockout"
 
-    def __init__(self, host, port, udlPassword, message_handler_func):
+    def __init__(self, host, port, udl_password, message_handler_func):
         self.host = host
         self.port = port
-        self.udlpassword = udlpassword
+        self.udlpassword = udl_password
         self.crc8_func = crcmod.mkCrcFun(poly=0x185, rev=False, initCrc=0xff)
         self.nextseq = 0
         self.message_handler_func = message_handler_func
         self.print_network_traffic = False
         self.last_command_time = 0
         self.last_received_seq = -1
+        self.last_sequence = -1
+        self.last_command = None
+        self.panelType = None
+        self.firmwareVersion = None
+        self.numberOfZones = -1
         self.zone = {}
         self.user = {}
         self.area = {}
+        self.s = None
         # used to record which of our idle commands we last sent to the panel
         self.lastIdleCommand = 0
         # Set to true if the idle loop should reread the site data
         self.siteDataChanged = False
 
-    def hexstr(self, s):
+    @staticmethod
+    def hexstr(s):
         """Convert a binary string into a hex representation suitable for logging payloads etc"""
         return " ".join("{:02x}".format(ord(c)) for c in s)
 
@@ -278,12 +290,12 @@ class TexecomConnect:
     def getnextseq(self):
         if self.nextseq == 256:
             self.nextseq = 0
-        next = self.nextseq
+        nextseq = self.nextseq
         self.nextseq += 1
-        return next
+        return nextseq
 
     def closesocket(self):
-        if self.s != None:
+        if self.s is not None:
             self.s.shutdown(socket.SHUT_RDWR)
             self.s.close()
             self.s = None
@@ -311,7 +323,7 @@ class TexecomConnect:
                 self.lastIdleCommand += 1
                 if self.lastIdleCommand == 3:
                     self.lastIdleCommand = 0
-                if result == None:
+                if result is None:
                     self.log("idle command failed; closing socket")
                     self.closesocket()
                     return None
@@ -399,7 +411,7 @@ class TexecomConnect:
 
     def login(self):
         response = self.sendcommand(self.CMD_LOGIN, self.udlpassword)
-        if response == None:
+        if response is None:
             self.log("sendcommand returned None for login")
             return False
         if response == self.CMD_RESPONSE_NAK:
@@ -428,12 +440,13 @@ class TexecomConnect:
             return False
         return True
 
-    def log(self, string):
+    @staticmethod
+    def log(string):
         timestamp = time.strftime("%Y-%m-%d %X")
         print(timestamp + ": " + string)
 
     def sendcommand(self, cmd, body):
-        if body:
+        if body is not None:
             body = cmd + body
         else:
             body = cmd
@@ -453,7 +466,7 @@ class TexecomConnect:
                 self.s.send(self.last_command)
 
         self.last_command = None
-        if response == None:
+        if response is None:
             return None
 
         commandid, payload = response[0], response[1:]
@@ -468,7 +481,7 @@ class TexecomConnect:
 
     def get_date_time(self):
         datetimeresp = self.sendcommand(self.CMD_GETDATETIME, None)
-        if datetimeresp == None:
+        if datetimeresp is None:
             return None
         if len(datetimeresp) < 6:
             self.log("GETDATETIME: response too short")
@@ -478,7 +491,6 @@ class TexecomConnect:
         datetimestr = '20{2:02d}-{1:02d}-{0:02d} {3:02d}:{4:02d}:{5:02d}'.format(*datetimeresp)
         paneltime = datetime.datetime(2000 + datetimeresp[2], datetimeresp[1], datetimeresp[0], *datetimeresp[3:])
         seconds = int((paneltime - datetime.datetime.now()).total_seconds())
-        diff = ""
         if seconds > 0:
             diff = " (panel is ahead by {:d} seconds)".format(seconds)
         else:
@@ -488,7 +500,7 @@ class TexecomConnect:
 
     def get_lcd_display(self):
         lcddisplay = self.sendcommand(self.CMD_GETLCDDISPLAY, None)
-        if lcddisplay == None:
+        if lcddisplay is None:
             return None
         if len(lcddisplay) != 32:
             self.log("GETLCDDISPLAY: response wrong length")
@@ -499,7 +511,7 @@ class TexecomConnect:
 
     def get_log_pointer(self):
         logpointerresp = self.sendcommand(self.CMD_GETLOGPOINTER, None)
-        if logpointerresp == None:
+        if logpointerresp is None:
             return None
         if len(logpointerresp) != 2:
             self.log("GETLOGPOINTER: response wrong length")
@@ -511,14 +523,14 @@ class TexecomConnect:
 
     def get_number_zones(self):
         idstr = self.get_panel_identification()
-        if idstr == None:
+        if idstr is None:
             return None
         self.panelType, numberOfZones, something, self.firmwareVersion = idstr.split()
         self.numberOfZones = int(numberOfZones)
 
     def get_panel_identification(self):
         panelid = self.sendcommand(self.CMD_GETPANELIDENTIFICATION, None)
-        if panelid == None:
+        if panelid is None:
             return None
         if len(panelid) != 32:
             self.log("GETPANELIDENTIFICATION: response wrong length")
@@ -530,7 +542,7 @@ class TexecomConnect:
     def get_zone_details(self, zoneNumber):
         # zone is two bytes on 680
         details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zoneNumber))
-        if details == None:
+        if details is None:
             return None
         zone = Zone()
         if len(details) == 34:
@@ -563,7 +575,7 @@ class TexecomConnect:
 
     def get_area_details(self, areaNumber):
         details = self.sendcommand(self.CMD_GETAREADETAILS, chr(areaNumber))
-        if details == None:
+        if details is None:
             return None
         area = Area()
         if len(details) == 25:
@@ -586,7 +598,8 @@ class TexecomConnect:
                  format(areaNumber, area.name, area.exitDelay, area.entry1Delay, area.entry1Delay, area.secondEntry))
         return area
 
-    def bcdDecode(self, bcd):
+    @staticmethod
+    def bcdDecode(bcd):
         result = ""
         for char in bcd:
             for val in (ord(char) >> 4, ord(char) & 0xF):
@@ -599,7 +612,7 @@ class TexecomConnect:
         # body = chr(usernumber & 0xff)+chr(usernumber >> 8)
         body = chr(usernumber)
         details = self.sendcommand(self.CMD_GETUSER, body)
-        if details == None:
+        if details is None:
             return None
         user = User()
         if len(details) == 23:
@@ -628,7 +641,7 @@ class TexecomConnect:
 
     def get_system_power(self):
         details = self.sendcommand(self.CMD_GETSYSTEMPOWER, None)
-        if details == None:
+        if details is None:
             return None
         if len(details) != 5:
             self.log("GETSYSTEMPOWER: response wrong length")
@@ -693,7 +706,7 @@ class TexecomConnect:
                 notifiedConnectionLoss = True
             try:
                 self.connect()
-            except socket.error, e:
+            except socket.error as e:
                 self.log("Connect failed - {}; sleeping for 5 seconds".format(e))
                 time.sleep(5)
                 continue
@@ -729,7 +742,7 @@ class TexecomConnect:
                     if self.siteDataChanged:
                         self.siteDataChanged = False
                         self.get_site_data()
-                    payload = self.recvresponse()
+                    self.recvresponse()
 
                 except socket.timeout:
                     # we didn't send any command, so a timeout is the expected result, continue our loop
