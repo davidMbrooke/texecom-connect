@@ -296,7 +296,10 @@ class TexecomConnect(object):
 
     def closesocket(self):
         if self.s is not None:
-            self.s.shutdown(socket.SHUT_RDWR)
+            try:
+                self.s.shutdown(socket.SHUT_RDWR)
+            except socket.error:
+                pass
             self.s.close()
             self.s = None
 
@@ -337,6 +340,10 @@ class TexecomConnect(object):
                 return None
             if header == "+++A":
                 self.log("Panel is trying to hangup modem; probably connected too soon")
+                self.closesocket()
+                return None
+            if len(header) == 0:
+                self.log("Panel has closed connection")
                 self.closesocket()
                 return None
             if len(header) < self.LENGTH_HEADER:
