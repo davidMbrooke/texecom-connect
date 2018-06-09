@@ -994,12 +994,11 @@ def garage_pir_smoothed_active(zone, old_state, new_state):
 
 if __name__ == '__main__':
     texhost = '192.168.1.9'
-    port = 10001
+    texport = 10001
     udlpassword = '1234'
 
-
     sys.stdout = Unbuffered(sys.stdout)
-    tc = TexecomConnect(texhost, port, udlpassword, message_handler)
+    tc = TexecomConnect(texhost, texport, udlpassword, message_handler)
     garage_pir = tc.get_zone(73)
     garage_pir.smoothed_active_func = garage_pir_smoothed_active
     tc.event_loop()
