@@ -45,9 +45,63 @@ class Area(object):
         pass
 
 
-class Zone:
-    pass
+class Zone(object):
+    def __init__(self, zone_number):
+        self.number = zone_number
+        self.text = ""
+        self.__active = False
+        self.active_func = None
+        self.active_since = None
+        self.last_active = None
+        self.__smoothed_active = False
+        self.smoothed_active_func = None
+        self.smoothed_active_since = None
+        self.smoothed_last_active = None
+        pass
 
+    def update(self):
+        if self.smoothed_active and not self.active:
+            time_since_last_active = time.time() - self.last_active
+            if time_since_last_active > 30:
+                self.smoothed_active = False
+        if self.smoothed_active and self.smoothed_active_func is not None:
+            self.smoothed_active_func(self, self.__smoothed_active, self.smoothed_active)
+
+    @property
+    def smoothed_active(self):
+        return self.__smoothed_active
+
+    @smoothed_active.setter
+    def smoothed_active(self, smoothed_active):
+        if smoothed_active == self.__smoothed_active:
+            return
+        if self.smoothed_active_func is not None:
+            self.smoothed_active_func(self, self.__smoothed_active, smoothed_active)
+        self.__smoothed_active = smoothed_active
+        if smoothed_active:
+            self.smoothed_active_since = time.time()
+        else:
+            self.smoothed_active_since = None
+            self.smoothed_last_active = time.time()
+
+
+    @property
+    def active(self):
+        return self.__active
+
+    @active.setter
+    def active(self, active):
+        if active == self.__active:
+            return
+        if self.active_func is not None:
+            self.active_func(self, self.__active, active)
+        self.__active = active
+        if active:
+            self.active_since = time.time()
+            self.smoothed_active = True
+        else:
+            self.last_active = time.time()
+            self.active_since = None
 
 class TexecomConnect(object):
     LENGTH_HEADER = 4
@@ -546,12 +600,17 @@ class TexecomConnect(object):
         self.log("Panel identification: " + panelid)
         return panelid
 
-    def get_zone_details(self, zoneNumber):
+    def get_zone(self, zone_number):
+        if zone_number not in self.zone:
+            self.zone[zone_number] = Zone(zone_number)
+        return self.zone[zone_number]
+
+    def get_zone_details(self, zone_number):
         # zone is two bytes on 680
-        details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zoneNumber))
+        details = self.sendcommand(self.CMD_GETZONEDETAILS, chr(zone_number))
         if details is None:
             return None
-        zone = Zone()
+        zone = self.get_zone(zone_number)
         if len(details) == 34:
             zone.zoneType = ord(details[0])
             zone.areaBitmap = ord(details[1])
@@ -577,7 +636,7 @@ class TexecomConnect(object):
         zone.text = zone.text.strip()
         if zone.zoneType != self.ZONETYPE_UNUSED:
             self.log("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
-                     format(zoneNumber, zone.zoneType, zone.areaBitmap, zone.text))
+                     format(zone.number, zone.zoneType, zone.areaBitmap, zone.text))
         return zone
 
     def get_area_details(self, areaNumber):
@@ -740,12 +799,8 @@ class TexecomConnect(object):
             self.log("Got all areas/zones/users; waiting for events")
             while self.s is not None:
                 try:
-                    garage_pir = self.zone[73]
-                    if garage_pir.active_since > 0:
-                        active_for = time.time() - garage_pir.active_since
-                        self.log("Garage PIR active for {:.1f} minutes".format(active_for / 60))
-                        if active_for > 4 * 60:
-                            os.system("./garage-pir.sh 'still active'")
+                    for zone in self.zone.values():
+                        zone.update()
                     if self.siteDataChanged:
                         self.siteDataChanged = False
                         self.get_site_data()
@@ -894,18 +949,12 @@ def message_handler(payload):
     if msg_type == tc.MSG_ZONEEVENT:
         zone_number = ord(payload[0])
         zone_bitmap = ord(payload[1])
-        zone = tc.zone[zone_number]
+        zone = tc.get_zone(zone_number)
         zone.state = zone_bitmap & 0x3
-        if zone_state == 1:
-            zone.active_since = time.time()
+        if zone.state == 1:
+            zone.active = True
         else:
-            zone.active_since = None
-        if zone_number == 73:
-            if zone_state == 1:
-                tc.log("Garage PIR activated; running script")
-                os.system("./garage-pir.sh 'activated'")
-            else:
-                tc.log("Garage PIR cleared")
+            zone.active = False
 
 
 # disable buffering to stdout when it's redirected to a file/pipe
@@ -927,6 +976,22 @@ class Unbuffered(object):
         return getattr(self.stream, attr)
 
 
+def garage_pir_smoothed_active(zone, old_state, new_state):
+    if not old_state and new_state:
+        tc.log("Garage PIR activated; running script")
+        os.system("./garage-pir.sh 'activated'")
+        zone.last_script_run = time.time()
+    elif old_state and not new_state:
+        tc.log("Garage PIR cleared")
+    elif old_state and new_state:
+        active_for = time.time() - zone.smoothed_active_since
+        time_since_script = time.time() - zone.last_script_run
+        tc.log("Garage PIR active for {:.1f} minutes".format(active_for / 60))
+        if time_since_script > 30:
+            zone.last_script_run = time.time()
+            os.system("./garage-pir.sh 'still active'")
+
+
 if __name__ == '__main__':
     texhost = '192.168.1.9'
     port = 10001
@@ -935,4 +1000,6 @@ if __name__ == '__main__':
 
     sys.stdout = Unbuffered(sys.stdout)
     tc = TexecomConnect(texhost, port, udlpassword, message_handler)
+    garage_pir = tc.get_zone(73)
+    garage_pir.smoothed_active_func = garage_pir_smoothed_active
     tc.event_loop()
