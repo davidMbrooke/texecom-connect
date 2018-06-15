@@ -995,6 +995,9 @@ def garage_pir_smoothed_active(zone, old_state, new_state):
 if __name__ == '__main__':
     texhost = '192.168.1.9'
     texport = 10001
+    # This is the default UDL password for a factory panel. For any real
+    # installation, use wintex to set the UDL password in the panel to a
+    # random 16 character alphanumeric string.
     udlpassword = '1234'
 
     sys.stdout = Unbuffered(sys.stdout)
