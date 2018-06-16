@@ -46,6 +46,8 @@ class Area(object):
 
 
 class Zone(object):
+    """Information about a zone and it's current state
+    """
     def __init__(self, zone_number):
         self.number = zone_number
         self.text = ""
@@ -54,6 +56,7 @@ class Zone(object):
         self.active_since = None
         self.last_active = None
         self.__smoothed_active = False
+        self.smoothed_active_delay = 30 # how long 'smoothed_active' will stay after last activation
         self.smoothed_active_func = None
         self.smoothed_active_since = None
         self.smoothed_last_active = None
@@ -62,10 +65,14 @@ class Zone(object):
     def update(self):
         if self.smoothed_active and not self.active:
             time_since_last_active = time.time() - self.last_active
-            if time_since_last_active > 30:
+            if time_since_last_active > self.smoothed_active_delay:
                 self.smoothed_active = False
         if self.smoothed_active and self.smoothed_active_func is not None:
-            self.smoothed_active_func(self, self.__smoothed_active, self.smoothed_active)
+            # Run the handler on every update whilst 'smoothed active' is true
+            self.smoothed_active_func(self, True, True)
+        if self.active and self.active_func is not None:
+            self.active_func(self, True, True)
+
 
     @property
     def smoothed_active(self):
@@ -975,21 +982,44 @@ class Unbuffered(object):
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
+def run_cmd(cmd):
+    tc.log("Running command: "+cmd)
+    os.system(cmd)
+
 
 def garage_pir_smoothed_active(zone, old_state, new_state):
     if not old_state and new_state:
         tc.log("Garage PIR activated; running script")
-        os.system("./garage-pir.sh 'activated'")
+        run_cmd("./garage-pir.sh 'activated'")
         zone.last_script_run = time.time()
+        zone.activations = 1
+        zone.secondNotification = False
     elif old_state and not new_state:
         tc.log("Garage PIR cleared")
-    elif old_state and new_state:
+        if zone.secondNotification:
+            run_cmd("./garage-pir.sh 'cleared'")
+
+def garage_pir_active(zone, old_state, new_state):
+    if new_state and not zone.smoothed_active:
+        # first activation; handle in smoothed_active
+        return
+    if not old_state and new_state:
+        zone.activations += 1
+        if zone.activations == 2 and not zone.secondNotification:
+            zone.secondNotification = True
+            run_cmd("./garage-pir.sh 'second activation'")
+    if old_state and new_state:
+        active_for = time.time() - zone.active_since
+        if (zone.activations == 1 and active_for > 4) and not zone.secondNotification:
+            zone.secondNotification = True
+            run_cmd("./garage-pir.sh 'active for over 4 seconds'")
+    if new_state:
         active_for = time.time() - zone.smoothed_active_since
         time_since_script = time.time() - zone.last_script_run
         tc.log("Garage PIR active for {:.1f} minutes".format(active_for / 60))
         if time_since_script > 30:
             zone.last_script_run = time.time()
-            os.system("./garage-pir.sh 'still active'")
+            run_cmd("./garage-pir.sh 'still active'")
 
 
 if __name__ == '__main__':
