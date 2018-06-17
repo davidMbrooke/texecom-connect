@@ -1034,4 +1034,5 @@ if __name__ == '__main__':
     tc = TexecomConnect(texhost, texport, udlpassword, message_handler)
     garage_pir = tc.get_zone(73)
     garage_pir.smoothed_active_func = garage_pir_smoothed_active
+    garage_pir.active_func = garage_pir_active
     tc.event_loop()
