@@ -439,7 +439,7 @@ class TexecomConnect(object):
             if msg_type == self.HEADER_TYPE_RESPONSE:
                 if msg_sequence != self.last_sequence:
                     self.log(
-                        "incorrect response seq: expected=" + str(self.last_sequence) + " actual=" + str(msg_sequence))
+                        "incorrect response seq: expected=" + str(self.last_sequence) + " actual=" + str(ord(msg_sequence)))
                     # recv again - either we receive the correct reply in the next packet, or we'll time out and retry the command
                     continue
             elif msg_type == self.HEADER_TYPE_MESSAGE:
@@ -449,11 +449,11 @@ class TexecomConnect(object):
                         next_msg_seq = 0
                     if msg_sequence == chr(self.last_received_seq):
                         self.log("ignoring message, sequence number is the same as last message: expected=" + str(
-                            next_msg_seq) + " actual=" + str(msg_sequence))
+                            next_msg_seq) + " actual=" + str(ord(msg_sequence)))
                         continue
                     if msg_sequence != chr(next_msg_seq):
                         self.log("message seq incorrect - processing message anyway: expected=" + str(
-                            next_msg_seq) + " actual=" + str(msg_sequence))
+                            next_msg_seq) + " actual=" + str(ord(msg_sequence)))
                         # process message anyway; perhaps we missed one or they arrived out of order
                 self.last_received_seq = ord(msg_sequence)
             if msg_type == self.HEADER_TYPE_COMMAND:
