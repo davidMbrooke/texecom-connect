@@ -742,7 +742,7 @@ class TexecomConnect(object):
             self.zone[zoneNumber] = zone
 
     def get_all_users(self):
-        panel_users = {12: 8, 24: 25, 48: 50, 88: 100, 168: 200, 640: 1000}
+        panel_users = {12: 8, 24: 25, 48: 50, 64: 50, 88: 100, 168: 200, 640: 1000}
         for usernumber in range(1, panel_users[self.numberOfZones]):
             user = self.get_user(usernumber)
             if user.valid():
@@ -752,7 +752,7 @@ class TexecomConnect(object):
         self.user[0] = user
 
     def get_all_areas(self):
-        panel_areas = {12: 2, 24: 2, 48: 4, 88: 8, 168: 16, 640: 64}
+        panel_areas = {12: 2, 24: 2, 48: 4, 64: 4, 88: 8, 168: 16, 640: 64}
         for areanumber in range(1, panel_areas[self.numberOfZones]):
             area = self.get_area_details(areanumber)
             self.area[areanumber] = area
