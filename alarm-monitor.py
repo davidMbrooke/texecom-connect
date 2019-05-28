@@ -148,6 +148,29 @@ class TexecomConnect(object):
     MSG_USEREVENT = chr(4)
     MSG_LOGEVENT = chr(5)
 
+    zone_types = {}
+    zone_types[1] = "Entry/Exit 1"
+    zone_types[2] = "Entry/Exit 2"
+    zone_types[3] = "Interior"
+    zone_types[4] = "Perimeter"
+    zone_types[5] = "24hr Audible"
+    zone_types[6] = "24hr Silent"
+    zone_types[7] = "Audible PA"
+    zone_types[8] = "Silent PA"
+    zone_types[9] = "Fire Alarm"
+    zone_types[10] = "Medical"
+    zone_types[11] = "24Hr Gas Alarm"
+    zone_types[12] = "Auxiliary Alarm"
+    zone_types[13] = "24hr Tamper Alarm"
+    zone_types[14] = "Exit Terminator"
+    zone_types[15] = "Keyswitch - Momentary"
+    zone_types[16] = "Keyswitch - Latching"
+    zone_types[17] = "Security Key"
+    zone_types[18] = "Omit Key"
+    zone_types[19] = "Custom Alarm"
+    zone_types[20] = "Confirmed PA Audible"
+    zone_types[21] = "Confirmed PA Audible"
+
     log_event_types = {}
     log_event_types[1] = "Entry/Exit 1"
     log_event_types[2] = "Entry/Exit 2"
@@ -642,8 +665,9 @@ class TexecomConnect(object):
         zone.text = re.sub(r'\W+', ' ', zone.text)
         zone.text = zone.text.strip()
         if zone.zoneType != self.ZONETYPE_UNUSED:
-            self.log("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
-                     format(zone.number, zone.zoneType, zone.areaBitmap, zone.text))
+            self.log("zone {:d} type {} name '{}'".
+                     format(zone.number, self.zone_types[zone.zoneType], zone.text))
+
         return zone
 
     def get_area_details(self, areaNumber):
