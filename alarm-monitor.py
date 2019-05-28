@@ -26,9 +26,27 @@ import datetime
 import os
 import sys
 import re
+import json
 
 import crcmod
 import hexdump
+
+import paho.mqtt.client as paho
+
+broker_url = os.getenv('BROKER_URL','192.168.1.1')
+broker_port = os.getenv('BROKER_PORT',1883)
+
+def on_message(client, userdata, message):
+    time.sleep(1)
+    print("received message =",str(message.payload.decode("utf-8")))
+
+client = paho.Client()
+
+client.on_message=on_message
+
+print("connecting to broker ", broker_url)
+client.connect(broker_url, broker_port)
+client.loop_start()
 
 
 class User(object):
@@ -147,6 +165,29 @@ class TexecomConnect(object):
     MSG_OUTPUTEVENT = chr(3)
     MSG_USEREVENT = chr(4)
     MSG_LOGEVENT = chr(5)
+
+    zone_types = {}
+    zone_types[1] = "Entry/Exit 1"
+    zone_types[2] = "Entry/Exit 2"
+    zone_types[3] = "Interior"
+    zone_types[4] = "Perimeter"
+    zone_types[5] = "24hr Audible"
+    zone_types[6] = "24hr Silent"
+    zone_types[7] = "Audible PA"
+    zone_types[8] = "Silent PA"
+    zone_types[9] = "Fire Alarm"
+    zone_types[10] = "Medical"
+    zone_types[11] = "24Hr Gas Alarm"
+    zone_types[12] = "Auxiliary Alarm"
+    zone_types[13] = "24hr Tamper Alarm"
+    zone_types[14] = "Exit Terminator"
+    zone_types[15] = "Keyswitch - Momentary"
+    zone_types[16] = "Keyswitch - Latching"
+    zone_types[17] = "Security Key"
+    zone_types[18] = "Omit Key"
+    zone_types[19] = "Custom Alarm"
+    zone_types[20] = "Confirmed PA Audible"
+    zone_types[21] = "Confirmed PA Audible"
 
     log_event_types = {}
     log_event_types[1] = "Entry/Exit 1"
@@ -642,8 +683,27 @@ class TexecomConnect(object):
         zone.text = re.sub(r'\W+', ' ', zone.text)
         zone.text = zone.text.strip()
         if zone.zoneType != self.ZONETYPE_UNUSED:
-            self.log("zone {:d} zone type {:d} area bitmap {:x} text '{}'".
-                     format(zone.number, zone.zoneType, zone.areaBitmap, zone.text))
+            if zone.zoneType == 1:
+                HAZoneType = "door"
+            elif zone.zoneType == 8:
+                HAZoneType = "safety"
+            else:
+                HAZoneType = "motion"
+            self.log("zone {:d} type {} name '{}'".
+                     format(zone.number, self.zone_types[zone.zoneType], zone.text))
+            topicbase = str("homeassistant/binary_sensor/" + str.lower((zone.text).replace(" ", "_")))
+            configtopic = str(topicbase + "/config")
+            statetopic = str(topicbase + "/state")
+            message = {
+                "name": str.lower(zone.text).replace(" ", "_"),
+                "device_class": HAZoneType,
+                "state_topic": statetopic, 
+                "payload_on": 1,
+                "payload_off": 0,
+                "unique_id": id(zone)
+                }
+            # print(json.dumps(message))
+            client.publish(configtopic,json.dumps(message))
         return zone
 
     def get_area_details(self, areaNumber):
@@ -666,9 +726,8 @@ class TexecomConnect(object):
             self.log("GETAREADETAILS: response wrong length")
             self.log("Payload: " + self.hexstr(details))
             return None
-
-        self.log("area {:d} text '{}' exitDelay {:d} entry1 {:d} entry2 {:d} secondEntry {:d}".
-                 format(areaNumber, area.name, area.exitDelay, area.entry1Delay, area.entry1Delay, area.secondEntry))
+        # self.log("area {:d} text '{}' exitDelay {:d} entry1 {:d} entry2 {:d} secondEntry {:d}".
+        #          format(areaNumber, area.name, area.exitDelay, area.entry1Delay, area.entry1Delay, area.secondEntry))
         return area
 
     @staticmethod
@@ -708,8 +767,8 @@ class TexecomConnect(object):
             return None
 
         if user.valid():
-            self.log("user {:d} text '{}' areas '{:d}' passcode '{}' tag '{}'".
-                     format(usernumber, user.name, user.areas, user.passcode, user.tag))
+            self.log("user {:d} name '{}'".
+                     format(usernumber, user.name))
         return user
 
     def get_system_power(self):
@@ -958,10 +1017,12 @@ def message_handler(payload):
         zone_bitmap = ord(payload[1])
         zone = tc.get_zone(zone_number)
         zone.state = zone_bitmap & 0x3
+        topic = "homeassistant/binary_sensor/"+str.lower((zone.text).replace(" ", "_"))+"/state"
         if zone.state == 1:
             zone.active = True
         else:
             zone.active = False
+        client.publish(topic,zone.state)
 
 
 # disable buffering to stdout when it's redirected to a file/pipe
@@ -982,57 +1043,14 @@ class Unbuffered(object):
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
-def run_cmd(cmd):
-    tc.log("Running command: "+cmd)
-    os.system(cmd)
-
-
-def garage_pir_smoothed_active(zone, old_state, new_state):
-    if not old_state and new_state:
-        tc.log("Garage PIR activated; running script")
-        run_cmd("./garage-pir.sh 'activated'")
-        zone.last_script_run = time.time()
-        zone.activations = 1
-        zone.secondNotification = False
-    elif old_state and not new_state:
-        tc.log("Garage PIR cleared")
-        if zone.secondNotification:
-            run_cmd("./garage-pir.sh 'cleared'")
-
-def garage_pir_active(zone, old_state, new_state):
-    if new_state and not zone.smoothed_active:
-        # first activation; handle in smoothed_active
-        return
-    if not old_state and new_state:
-        zone.activations += 1
-        if zone.activations == 2 and not zone.secondNotification:
-            zone.secondNotification = True
-            run_cmd("./garage-pir.sh 'second activation'")
-    if old_state and new_state:
-        active_for = time.time() - zone.active_since
-        if (zone.activations == 1 and active_for > 4) and not zone.secondNotification:
-            zone.secondNotification = True
-            run_cmd("./garage-pir.sh 'active for over 4 seconds'")
-    if new_state:
-        active_for = time.time() - zone.smoothed_active_since
-        time_since_script = time.time() - zone.last_script_run
-        tc.log("Garage PIR active for {:.1f} minutes".format(active_for / 60))
-        if time_since_script > 30:
-            zone.last_script_run = time.time()
-            run_cmd("./garage-pir.sh 'still active'")
-
-
 if __name__ == '__main__':
-    texhost = '192.168.1.9'
-    texport = 10001
+    texhost = os.getenv('TEXHOST','192.168.1.9')
+    texport = os.getenv('TEXPORT',10001)
     # This is the default UDL password for a factory panel. For any real
     # installation, use wintex to set the UDL password in the panel to a
     # random 16 character alphanumeric string.
-    udlpassword = '1234'
+    udlpassword = os.getenv('UDLPASSWORD','1234')
 
     sys.stdout = Unbuffered(sys.stdout)
     tc = TexecomConnect(texhost, texport, udlpassword, message_handler)
-    garage_pir = tc.get_zone(73)
-    garage_pir.smoothed_active_func = garage_pir_smoothed_active
-    garage_pir.active_func = garage_pir_active
     tc.event_loop()
