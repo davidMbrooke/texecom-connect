@@ -74,6 +74,31 @@ class TexecomConnectMqtt(TexecomConnect):
             client.publish(configtopic,json.dumps(message), retain=True)
         return zone
 
+    # Overload get_area_details to publish area information to MQTT
+    def get_area_details(self, areaNumber):
+        area = super(TexecomConnectMqtt, self).get_area_details(areaNumber)
+        name = str.lower((area.name).replace(" ", "_"))
+        topicbase = str("homeassistant/alarm_control_panel/" + name)
+        configtopic = str(topicbase + "/config")
+        statetopic = str(topicbase + "/state")
+        commandtopic = str(topicbase + "/command")
+        message = {
+            "name": name,
+            "state_topic": statetopic,
+            "command_topic": commandtopic,
+            "unique_id": ".".join([self.panelType, "area", name]),
+            "device": {
+                "name": "Texecom " + self.panelType + " " + str(self.numberOfZones),
+                "identifiers": "123456789", #TODO panel serial number?
+                "manufacturer": "Texecom",
+                "model": self.panelType + " " + str(self.numberOfZones)
+            }
+        }
+        # self.log(configtopic + ":" + json.dumps(message))
+        client.publish(configtopic,json.dumps(message), retain=True)
+        return area
+
+
 def message_handler(payload):
     tc.log(tc.decode_message_to_text(payload))
     msg_type, payload = payload[0], payload[1:]
@@ -87,7 +112,17 @@ def message_handler(payload):
             zone.active = True
         else:
             zone.active = False
+        tc.log("MQTT Update %s: %s" % (topic, zone.state))
         client.publish(topic,zone.state)
+    elif msg_type == tc.MSG_AREAEVENT:
+        area_number = ord(payload[0])
+        area_state = ord(payload[1])
+        area_state_str = ["disarmed", "pending", "pending", "armed_away", "armed_night", "triggered"][area_state]
+        area = tc.get_area(area_number)
+        area.state = area_state_str
+        topic = "homeassistant/alarm_control_panel/" + str.lower((area.name).replace(" ", "_"))+"/state"
+        tc.log("MQTT Update %s: %s" % (topic, area.state))
+        client.publish(topic, area.state)
 
 
 # disable buffering to stdout when it's redirected to a file/pipe
