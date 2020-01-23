@@ -52,19 +52,26 @@ class TexecomConnectMqtt(TexecomConnect):
                 HAZoneType = "safety"
             else:
                 HAZoneType = "motion"
-            topicbase = str("homeassistant/binary_sensor/" + str.lower((zone.text).replace(" ", "_")))
+            name = str.lower((zone.text).replace(" ", "_"))
+            topicbase = str("homeassistant/binary_sensor/" + name)
             configtopic = str(topicbase + "/config")
             statetopic = str(topicbase + "/state")
             message = {
-                "name": str.lower(zone.text).replace(" ", "_"),
+                "name": name,
                 "device_class": HAZoneType,
                 "state_topic": statetopic,
-                "payload_on": 1,
-                "payload_off": 0,
-                "unique_id": id(zone)
+                "payload_on": "1",
+                "payload_off": "0",
+                "unique_id": ".".join([self.panelType, name]),
+                "device": {
+                    "name": "Texecom " + self.panelType + " " + str(self.numberOfZones),
+                    "identifiers": "123456789", #TODO panel serial number?
+                    "manufacturer": "Texecom",
+                    "model": self.panelType + " " + str(self.numberOfZones)
                 }
-            # print(json.dumps(message))
-            client.publish(configtopic,json.dumps(message))
+            }
+            # self.log(configtopic + ":" + json.dumps(message))
+            client.publish(configtopic,json.dumps(message), retain=True)
         return zone
 
 def message_handler(payload):
