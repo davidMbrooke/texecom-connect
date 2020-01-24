@@ -1,9 +1,11 @@
 version: "3"
 services:
   alarm-monitor:
-    image: texecom
+    build: .
     restart: always
     environment:
       - TEXHOST=192.168.1.1
       - UDLPASSWORD=1234
-      - BROKERURL=192.168.1.2
+      - BROKER_URL=192.168.1.2
+      - BROKER_USER=user
+      - BROKER_PASS=pass
