@@ -3,6 +3,7 @@ FROM python:2
 WORKDIR /usr/src/app
 
 COPY alarm-monitor.py ./
+COPY texecomConnect.py ./
 COPY hexdump.py ./
 
 COPY requirements.txt ./
