@@ -28,6 +28,8 @@ import paho.mqtt.client as paho
 
 broker_url = os.getenv('BROKER_URL','192.168.1.1')
 broker_port = os.getenv('BROKER_PORT',1883)
+broker_user = os.getenv('BROKER_USER',None)
+broker_pass = os.getenv('BROKER_PASS',None)
 
 def on_message(client, userdata, message):
     time.sleep(1)
@@ -35,6 +37,7 @@ def on_message(client, userdata, message):
 
 client = paho.Client()
 
+client.username_pw_set(broker_user, broker_pass)
 client.on_message=on_message
 
 print("connecting to broker ", broker_url)
