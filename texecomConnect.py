@@ -41,8 +41,8 @@ class User(object):
 
 class Area(object):
     def __init__(self):
-        pass
-
+        self.name = "unknown"
+        self.state = "unknown"
 
 class Zone(object):
     """Information about a zone and it's current state
@@ -667,6 +667,11 @@ class TexecomConnect(object):
             self.log("zone {:d} type {} name '{}'".
                      format(zone.number, self.zone_types[zone.zoneType], zone.text))
         return zone
+
+    def get_area(self, areaNumber):
+        if areaNumber not in self.zone:
+            self.area[areaNumber] = Area(areaNumber)
+        return self.area[areaNumber]
 
     def get_area_details(self, areaNumber):
         details = self.sendcommand(self.CMD_GETAREADETAILS, chr(areaNumber))
